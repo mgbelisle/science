@@ -6,9 +6,13 @@ import (
 	"sync"
 )
 
-type Node func(request []byte) (response []byte, _ error)
+type Node struct {
+	handler Handler
+}
 
-func NewNode(network *Network, id string) Node {
+type Handler func(request []byte) (response []byte, _ error)
+
+func NewHandler(network *Network, storage *Storage) Handler {
 	// State, uses mutex for accessing it
 	mtx := sync.Mutex{}
 	thisN := 0
@@ -23,15 +27,14 @@ func NewNode(network *Network, id string) Node {
 			return nil, err
 		}
 		switch msg.Type {
-		case paxosType:
+		case writeType:
 			// Paxos itself, keep trying rounds until successful
 			for {
 				mtx.Lock()
 				thisN++
 				phase1 := encodeMessage(&message{
-					Sender: id,
-					Type:   phase1Type,
-					N:      thisN,
+					Type: phase1Type,
+					N:    thisN,
 				})
 				mtx.Unlock()
 				wg2 := sync.WaitGroup{}
@@ -44,7 +47,7 @@ func NewNode(network *Network, id string) Node {
 					wg2.Add(1)
 					go func(id2 string, node2 Node) {
 						defer wg2.Add(-1)
-						response, err := node2(phase1)
+						response, err := node2.handler(phase1)
 						if err != nil {
 							network.stderrLogger.Printf("Node %s failed phase 1 with %s", id, id2)
 							return
@@ -124,9 +127,23 @@ func NewNode(network *Network, id string) Node {
 	return node
 }
 
-func Consensus(node Node, value []byte) ([]byte, error) {
+func Read(node Node, key uint64) ([]byte, error) {
 	respBytes, err := node(encodeMessage(&message{
-		Type:  paxosType,
+		Type: readType,
+		Key:  key,
+	}))
+	if err != nil {
+		return nil, err
+	}
+	resp := &message{}
+	err = json.Unmarshal(respBytes, resp)
+	return resp.Value, err
+}
+
+func Write(node Node, key uint64, value []byte) ([]byte, error) {
+	respBytes, err := node(encodeMessage(&message{
+		Type:  writeType,
+		Key:   key,
 		Value: value,
 	}))
 	if err != nil {

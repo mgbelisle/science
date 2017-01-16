@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	paxosType  = "paxos"
+	readType   = "read"
+	writeType  = "write"
 	phase1Type = "phase1"
 	phase2Type = "phase2"
 )
@@ -22,8 +23,8 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Sender string `json:"s,omitempty"`
-	Type   string `json:"t,omitempty"`
-	N      int    `json:"n,omitempty"`
-	Value  []byte `json:"v,omitempty"`
+	Type  string `json:"t,omitempty"`
+	Key   uint64 `json:"k,omitempty"`
+	N     uint64 `json:"n,omitempty"`
+	Value []byte `json:"v,omitempty"`
 }

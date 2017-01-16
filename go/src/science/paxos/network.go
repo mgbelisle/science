@@ -1,35 +1,29 @@
 package paxos
 
 import (
-	"io"
 	"io/ioutil"
 	"log"
-	"os"
 )
 
 func NewNetwork() *Network {
 	return &Network{
-		nodes:        map[string]Node{},
-		stdoutLogger: logger(ioutil.Discard),
-		stderrLogger: logger(ioutil.Discard),
+		nodes:        map[*Node]struct{}{},
+		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 }
 
 type Network struct {
-	nodes        map[string]Node
+	nodes        map[*Node]struct{}
 	stdoutLogger *log.Logger
 	stderrLogger *log.Logger
 }
 
-func AddNode(network *Network, node Node, id string) {
-	network.nodes[id] = node
+func AddNode(network *Network, node *Node) {
+	network.nodes[node] = struct{}{}
 }
 
-func logger(writer io.Writer) *log.Logger {
-	return log.New(writer, "", log.LstdFlags)
-}
-
-func SetVerbose(network *Network) {
-	network.stdoutLogger = logger(os.Stdout)
-	network.stderrLogger = logger(os.Stderr)
+func SetLoggers(network *Network, stdout, stderr *log.Logger) {
+	network.stdoutLogger = stdout
+	network.stderrLogger = stderr
 }
