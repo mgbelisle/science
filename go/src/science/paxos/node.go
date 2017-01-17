@@ -17,23 +17,22 @@ func NewHandler(network *Network, storage *Storage) Handler {
 	// A state mutex for each key
 	stateMtxMapMtx := &sync.Mutex{} // The map itself needs a mutex
 	stateMtxMap := map[uint64]*sync.Mutex{}
-	getStateMtx := func(key uint64) *sync.Mutex {
-		stateMtxMapMtx.Lock()
-		defer stateMtxMapMtx.Unlock()
-		stateMtx, ok := stateMtxMap[key]
-		if !ok {
-			stateMtx = &sync.Mutex{}
-			stateMtxMap[key] = stateMtx
-		}
-		return stateMtx
-	}
 
 	return func(request []byte) (response []byte, _ error) {
 		msg := &message{}
 		if err := json.Unmarshal(request, msg); err != nil {
 			return nil, err
 		}
-		stateMtx := getStateMtx(msg.Key)
+		stateMtx := func(key uint64) *sync.Mutex {
+			stateMtxMapMtx.Lock()
+			defer stateMtxMapMtx.Unlock()
+			stateMtx, ok := stateMtxMap[key]
+			if !ok {
+			stateMtx = &sync.Mutex{}
+				stateMtxMap[key] = stateMtx
+			}
+			return stateMtx
+		}(msg.Key)
 		state, err := func() (*stateStruct, error) {
 			stateMtx.Lock()
 			defer stateMtx.Unlock()
@@ -119,7 +118,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 					defer stateMtx.Unlock()
 					value := msg.Value
 					if 0 < state.AcceptedN {
-						value = alreadyAcceptedValue
+						value = state.Value
 					}
 					return  encodeMessage(&message{
 						Type:   phase2Type,
