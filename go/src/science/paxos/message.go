@@ -2,7 +2,6 @@ package paxos
 
 import (
 	"encoding/json"
-	"log"
 )
 
 const (
@@ -12,19 +11,15 @@ const (
 	phase2Type = "phase2"
 )
 
-// Response types are already known
 func encodeMessage(msg *message) []byte {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		// Not sure how this could happen
-		log.Fatalf("Error encoding message: %v", err)
-	}
+	data, _ := json.Marshal(msg)
 	return data
 }
 
 type message struct {
-	Type  string `json:"t,omitempty"`
-	Key   uint64 `json:"k,omitempty"`
-	N     uint64 `json:"n,omitempty"`
-	Value []byte `json:"v,omitempty"`
+	Type  string `json:"t"`
+	Key   uint64 `json:"k"`
+	N     uint64 `json:"n"`
+	Value []byte `json:"v"`
+	Final bool   `json:"f"`
 }

@@ -10,7 +10,7 @@ import (
 	"science/paxos"
 )
 
-const usagePrefix = `Runs the smallsky server
+const usagePrefix = `Runs the paxos toy problem
 
 Usage: go run ./main.go [OPTIONS]
 
@@ -30,7 +30,7 @@ func main() {
 	flag.Parse()
 	network := paxos.NewNetwork()
 	if *verboseFlag {
-		paxos.SetVerbose(network)
+		paxos.SetLoggers(network, os.Stdout, os.Stderr)
 	}
 	nodes := map[string]paxos.Node{}
 	wg := sync.WaitGroup{}
@@ -46,7 +46,7 @@ func main() {
 		"Franz Krieger":   "Berlin",
 	}
 	for agent := range agents {
-		nodes[agent] = paxos.NewNode(network, agent)
+		nodes[agent] = paxos.AddNode(network, paxos.NewNode(paxos.NewHandler(network, paxos.MemoryStorage())))
 	}
 	for agent, proposal := range agents {
 		wg.Add(1)

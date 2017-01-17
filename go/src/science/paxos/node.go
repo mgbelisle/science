@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 type Node struct {
@@ -13,74 +14,119 @@ type Node struct {
 type Handler func(request []byte) (response []byte, _ error)
 
 func NewHandler(network *Network, storage *Storage) Handler {
-	// State, uses mutex for accessing it
-	mtx := sync.Mutex{}
-	thisN := 0
-	acceptedN := 0
-	acceptedValue := []byte(nil)
-	promisedN := 0
-	promisedSender := ""
+	// A state mutex for each key
+	stateMtxMapMtx := &sync.Mutex{} // The map itself needs a mutex
+	stateMtxMap := map[uint64]*sync.Mutex{}
+	getStateMtx := func(key uint64) *sync.Mutex {
+		stateMtxMapMtx.Lock()
+		defer stateMtxMapMtx.Unlock()
+		stateMtx, ok := stateMtxMap[key]
+		if !ok {
+			stateMtx = &sync.Mutex{}
+			stateMtxMap[key] = stateMtx
+		}
+		return stateMtx
+	}
 
-	node := func(request []byte) (response []byte, _ error) {
+	return func(request []byte) (response []byte, _ error) {
 		msg := &message{}
 		if err := json.Unmarshal(request, msg); err != nil {
 			return nil, err
 		}
+		stateMtx := getStateMtx(msg.Key)
+		state, err := func() (*stateStruct, error) {
+			stateMtx.Lock()
+			defer stateMtx.Unlock()
+			stateBytes, err := storage.Get(msg.Key)
+			if err != nil {
+				return nil, err
+			}
+			state, err := &stateStruct{}, error(nil)
+			if 0 < len(stateBytes) {
+				err := json.Unmarshal(stateBytes, state)
+			}
+			return state, err
+		}()
+		if err != nil {
+			return nil, err
+		}
 		switch msg.Type {
+		case readType:
+			phase1 := encodeMessage(&message{Type: phase1Type})
+			responseCounts := map[string]uint64{}
+			mtx := &sync.Mutex{}
+			wg := &sync.WaitGroup{}
+			for node := range network.nodes {
+				// TODO
+			}
 		case writeType:
 			// Paxos itself, keep trying rounds until successful
 			for {
-				mtx.Lock()
-				thisN++
-				phase1 := encodeMessage(&message{
-					Type: phase1Type,
-					N:    thisN,
-				})
-				mtx.Unlock()
-				wg2 := sync.WaitGroup{}
-				mtx2 := sync.Mutex{}
-				alreadyAcceptedN := 0
-				alreadyAcceptedValue := []byte(nil)
-				numResponses := 0
-				for id2, node2 := range network.nodes {
+				phase1, err := func() ([]byte, error) {
+					stateMtx.Lock()
+					defer stateMtx.Unlock()
+					state.N++
+					if err := storage.Put(msg.Key, encodeState(state)); err != nil {
+						return nil, err
+					}
+					return encodeMessage(&message{
+						Type: phase1Type,
+						N:    state.N,
+					}), nil
+				}()
+				if err != nil {
+					network.stderrLogger.Printf("%v", err)
+					continue
+				}
+				wg := sync.WaitGroup{}
+				numResponses := uint64(0)
+				for node2 := range network.nodes {
 					// Contact each node in parallel
-					wg2.Add(1)
-					go func(id2 string, node2 Node) {
-						defer wg2.Add(-1)
+					wg.Add(1)
+					go func(node2 *Node) {
+						defer wg.Add(-1)
 						response, err := node2.handler(phase1)
 						if err != nil {
-							network.stderrLogger.Printf("Node %s failed phase 1 with %s", id, id2)
+							network.stderrLogger.Printf("Failed phase 1: %v", err)
 							return
 						}
 						phase1Resp := &message{}
 						if err := json.Unmarshal(response, phase1Resp); err != nil {
-							network.stderrLogger.Printf("Error json decoding phase 1 response: %v\n%s", err, response)
+							network.stderrLogger.Printf("Failed decoding phase 1 response: %v\n%s", err, response)
 							return
 						}
-						mtx2.Lock()
-						defer mtx2.Unlock()
-						if alreadyAcceptedN < phase1Resp.N {
-							alreadyAcceptedN = phase1Resp.N
-							alreadyAcceptedValue = phase1Resp.Value
+						stateMtx.Lock()
+						defer stateMtx.Unlock()
+						if state.AcceptedN < phase1Resp.N {
+							state.AcceptedN = phase1Resp.N
+							state.Value = phase1Resp.Value
 						}
-						numResponses++
-					}(id2, node2)
+						if err := storage.Put(msg.Key, encodeState(state)); err != nil {
+							network.stderrLogger.Printf("Failed storing state: %v", err)
+							return
+						}
+						atomic.AddUint64(&numResponses, 1)
+					}(node2)
 				}
-				wg2.Wait()
-				if l := len(network.nodes); numResponses <= l/2 {
-					network.stderrLogger.Printf("Node %s failed phase 1 %d/%d", id, l-numResponses, l)
+				wg.Wait()
+				if l := len(network.nodes); int(numResponses) <= l/2 {
+					network.stderrLogger.Printf("Failed phase 1 on %d/%d", l-int(numResponses), l)
 					continue
 				}
-				value := msg.Value
-				if 0 < alreadyAcceptedN {
-					value = alreadyAcceptedValue
-				}
-				phase2 := encodeMessage(&message{
-					Sender: id,
-					Type:   phase2Type,
-					N:      thisN,
-					Value:  value,
-				})
+				
+				phase2 := func() []byte {
+					stateMtx.Lock()
+					defer stateMtx.Unlock()
+					value := msg.Value
+					if 0 < state.AcceptedN {
+						value = alreadyAcceptedValue
+					}
+					return  encodeMessage(&message{
+						Type:   phase2Type,
+						N:      thisN,
+						Value:  value,
+					})
+				}()
 				numResponses = 0
 				for id2, node2 := range network.nodes {
 					if _, err := node2(phase2); err != nil {
@@ -123,8 +169,6 @@ func NewHandler(network *Network, storage *Storage) Handler {
 		}
 		return nil, fmt.Errorf("Illegal type: %s", msg.Type)
 	}
-	AddNode(network, node, id)
-	return node
 }
 
 func Read(node Node, key uint64) ([]byte, error) {
