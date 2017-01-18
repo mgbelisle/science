@@ -7,12 +7,18 @@ import (
 )
 
 func NewNetwork() *Network {
+	network := &Network{
+		nodes:        map[*Node]struct{}{},
+		handlerChan:  make(chan *handlerStruct),
+		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+	}
+
 	// Manage the goroutines, one for each key, and do cleanup once they are unused
-	handlerChan := make(chan *handlerStruct)
 	go func() {
 		managerMap := map[uint64]*handlerManager{}
 		managerMapMtx := &sync.Mutex{}
-		for handler := range handlerChan {
+		for handler := range network.handlerChan {
 			managerMapMtx.Lock()
 			manager, ok := managerMap[handler.Request.Key]
 			if !ok {
@@ -29,11 +35,11 @@ func NewNetwork() *Network {
 						manager.Mutex.Lock()
 						manager.N++
 						manager.Mutex.Unlock()
-						response, err := handle(handler.Request, handler.Network, handler.Storage)
+						response, err := handle(handler.Request, network, handler.Storage)
 						manager.Mutex.Lock()
 						manager.N--
 						if manager.N == 0 {
-							close(handlerChan)
+							close(manager.Chan)
 							delete(managerMap, handler.Request.Key)
 						}
 						manager.Mutex.Unlock()
@@ -42,15 +48,13 @@ func NewNetwork() *Network {
 					}
 				}(manager)
 			}
+			go func(handler *handlerStruct, manager *handlerManager) {
+				manager.Chan <- handler
+			}(handler, manager)
 		}
 	}()
 
-	return &Network{
-		nodes:        map[*Node]struct{}{},
-		handlerChan:  handlerChan,
-		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
-		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
-	}
+	return network
 }
 
 type Network struct {

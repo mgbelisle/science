@@ -19,7 +19,6 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			Request:  reqMsg,
 			Response: respChan,
 			Err:      errChan,
-			Network:  network,
 			Storage:  storage,
 		}
 		respMsg, err := <-respChan, <-errChan
@@ -35,7 +34,6 @@ type handlerStruct struct {
 	Request  *message
 	Response chan *message
 	Err      chan error
-	Network  *Network
 	Storage  *Storage
 }
 
