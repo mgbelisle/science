@@ -3,7 +3,6 @@ package paxos
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -11,8 +10,8 @@ type Handler func(request []byte) (response []byte, _ error)
 
 func NewHandler(network *Network, storage *Storage) Handler {
 	// Manage the goroutines, one for each key, and do cleanup once they are unused
-	managerMap := map[uint64]*handlerManager{}
-	managerMapMtx := &sync.Mutex{}
+	handlerChanMap := map[uint64]chan *handlerStruct{}
+	handlerChanMapMtx := &sync.Mutex{}
 
 	return func(request []byte) (response []byte, _ error) {
 		reqMsg := &message{}
@@ -20,19 +19,17 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			return nil, err
 		}
 
-		// Get the manager
-		managerMapMtx.Lock()
-		manager, ok := managerMap[reqMsg.Key]
+		// Get the handler channel
+		handlerChanMapMtx.Lock()
+		handlerChan, ok := handlerChanMap[reqMsg.Key]
 		if !ok {
-			manager = &handlerManager{
-				Chan: make(chan *handlerStruct),
-			}
-			managerMap[reqMsg.Key] = manager
+			handlerChan = make(chan *handlerStruct)
+			handlerChanMap[reqMsg.Key] = handlerChan
 		}
-		managerMapMtx.Unlock()
+		handlerChanMapMtx.Unlock()
 		respChan, errChan := make(chan *message), make(chan error)
 		go func() {
-			manager.Chan <- &handlerStruct{
+			handlerChan <- &handlerStruct{
 				Request:  reqMsg,
 				Response: respChan,
 				Err:      errChan,
@@ -40,25 +37,21 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			}
 		}()
 		if !ok {
+			// Doesn't exist, start a goroutine that pulls from the channel and cleans
+			// up after itself
 			go func() {
-				for handler := range manager.Chan {
-					managerMapMtx.Lock()
-					manager.N++
-					managerMapMtx.Unlock()
-					response, err := handle(handler.Request, network, handler.Storage)
-					managerMapMtx.Lock()
-					manager.N--
-					managerMapMtx.Unlock()
+				select {
+				case handler := <-handlerChan:
+					response, err := handle(handler.Request, network, storage)
 					handler.Response <- response
 					handler.Err <- err
-					go func(handler *handlerStruct) {
-						managerMapMtx.Lock()
-						if manager.N <= 0 {
-							close(manager.Chan)
-							delete(managerMap, handler.Request.Key)
-						}
-						managerMapMtx.Unlock()
-					}(handler)
+				default:
+					network.stdoutLogger.Printf("Closed channel for %d", reqMsg.Key)
+					handlerChanMapMtx.Lock()
+					delete(handlerChanMap, reqMsg.Key)
+					close(handlerChan)
+					handlerChanMapMtx.Unlock()
+					return
 				}
 			}()
 		}
@@ -77,11 +70,6 @@ type handlerStruct struct {
 	Response chan *message
 	Err      chan error
 	Storage  *Storage
-}
-
-type handlerManager struct {
-	Chan chan *handlerStruct
-	N    int
 }
 
 func handle(request *message, network *Network, storage *Storage) (response *message, _ error) {
