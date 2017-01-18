@@ -10,22 +10,60 @@ import (
 type Handler func(request []byte) (response []byte, _ error)
 
 func NewHandler(network *Network, storage *Storage) Handler {
+	// Manage the goroutines, one for each key, and do cleanup once they are unused
+	managerMap := map[uint64]*handlerManager{}
+	managerMapMtx := &sync.Mutex{}
+
 	return func(request []byte) (response []byte, _ error) {
 		reqMsg := &message{}
 		if err := json.Unmarshal(request, reqMsg); err != nil {
 			return nil, err
 		}
+
+		// Get the manager
+		managerMapMtx.Lock()
+		manager, ok := managerMap[reqMsg.Key]
+		if !ok {
+			manager = &handlerManager{
+				Chan: make(chan *handlerStruct),
+			}
+			managerMap[reqMsg.Key] = manager
+		}
+		managerMapMtx.Unlock()
 		respChan, errChan := make(chan *message), make(chan error)
 		go func() {
-			network.handlerChan <- &handlerStruct{
+			manager.Chan <- &handlerStruct{
 				Request:  reqMsg,
 				Response: respChan,
 				Err:      errChan,
 				Storage:  storage,
 			}
 		}()
+		if !ok {
+			go func() {
+				for handler := range manager.Chan {
+					managerMapMtx.Lock()
+					manager.N++
+					managerMapMtx.Unlock()
+					response, err := handle(handler.Request, network, handler.Storage)
+					managerMapMtx.Lock()
+					manager.N--
+					managerMapMtx.Unlock()
+					handler.Response <- response
+					handler.Err <- err
+					go func(handler *handlerStruct) {
+						managerMapMtx.Lock()
+						if manager.N <= 0 {
+							close(manager.Chan)
+							delete(managerMap, handler.Request.Key)
+						}
+						managerMapMtx.Unlock()
+					}(handler)
+				}
+			}()
+		}
+
 		respMsg, err := <-respChan, <-errChan
-		log.Printf("bar")
 		if err != nil {
 			return nil, err
 		}
@@ -42,9 +80,8 @@ type handlerStruct struct {
 }
 
 type handlerManager struct {
-	Chan  chan *handlerStruct
-	N     uint64
-	Mutex *sync.Mutex
+	Chan chan *handlerStruct
+	N    int
 }
 
 func handle(request *message, network *Network, storage *Storage) (response *message, _ error) {
