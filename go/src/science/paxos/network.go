@@ -8,36 +8,36 @@ import (
 
 func NewNetwork() *Network {
 	// Manage the goroutines, one for each key, and do cleanup once they are unused
-	fooChan := make(chan *fooStruct)
+	handlerChan := make(chan *handlerStruct)
 	go func() {
-		managerMap := map[uint64]*fooManager{}
+		managerMap := map[uint64]*handlerManager{}
 		managerMtx := &sync.Mutex{}
-		for foo := range fooChan {
+		for handler := range handlerChan {
 			managerMtx.Lock()
-			manager, ok := managerMap[foo.Request.Key]
+			manager, ok := managerMap[handler.Request.Key]
 			if !ok {
-				manager = &fooManager{
-					Chan: make(chan *fooStruct),
+				manager = &handlerManager{
+					Chan: make(chan *handlerStruct),
 				}
-				managerMap[foo.Request.Key] = manager
+				managerMap[handler.Request.Key] = manager
 			}
 			managerMtx.Unlock()
 			if !ok {
-				go func(fooChan chan *fooStruct) {
-					for foo := range fooChan {
+				go func(handlerChan chan *handlerStruct) {
+					for handler := range handlerChan {
 						managerMtx.Lock()
 						manager.N++
 						managerMtx.Unlock()
-						response, err := handle(foo.Request, foo.Network, foo.Storage)
+						response, err := handle(handler.Request, handler.Network, handler.Storage)
 						managerMtx.Lock()
 						manager.N--
 						if manager.N == 0 {
-							close(fooChan)
-							delete(managerMap, foo.Request.Key)
+							close(handlerChan)
+							delete(managerMap, handler.Request.Key)
 						}
 						managerMtx.Unlock()
-						foo.Response <- response
-						foo.Err <- err
+						handler.Response <- response
+						handler.Err <- err
 					}
 				}(manager.Chan)
 			}
@@ -46,7 +46,7 @@ func NewNetwork() *Network {
 
 	return &Network{
 		nodes:        map[*Node]struct{}{},
-		fooChan:      fooChan,
+		handlerChan:  handlerChan,
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
@@ -54,7 +54,7 @@ func NewNetwork() *Network {
 
 type Network struct {
 	nodes        map[*Node]struct{}
-	fooChan      chan *fooStruct
+	handlerChan  chan *handlerStruct
 	stdoutLogger *log.Logger
 	stderrLogger *log.Logger
 }

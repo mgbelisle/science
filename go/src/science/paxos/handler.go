@@ -15,7 +15,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			return nil, err
 		}
 		respChan, errChan := make(chan *message), make(chan error)
-		network.fooChan <- &fooStruct{
+		network.handlerChan <- &handlerStruct{
 			Request:  reqMsg,
 			Response: respChan,
 			Err:      errChan,
@@ -31,7 +31,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 	}
 }
 
-type fooStruct struct {
+type handlerStruct struct {
 	Request  *message
 	Response chan *message
 	Err      chan error
@@ -39,8 +39,8 @@ type fooStruct struct {
 	Storage  *Storage
 }
 
-type fooManager struct {
-	Chan chan *fooStruct
+type handlerManager struct {
+	Chan chan *handlerStruct
 	N    uint64
 }
 
