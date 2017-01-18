@@ -15,7 +15,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			return nil, err
 		}
 		respChan, errChan := make(chan *message), make(chan error)
-		fooChan <- &fooStruct{
+		network.fooChan <- &fooStruct{
 			Request:  reqMsg,
 			Response: respChan,
 			Err:      errChan,
@@ -42,46 +42,6 @@ type fooStruct struct {
 type fooManager struct {
 	Chan chan *fooStruct
 	N    uint64
-}
-
-var fooChan = make(chan *fooStruct)
-
-func init() {
-	go func() {
-		// Manage the goroutines, one for each key, and do cleanup once they are unused
-		managerMap := map[uint64]*fooManager{}
-		managerMtx := &sync.Mutex{}
-		for foo := range fooChan {
-			managerMtx.Lock()
-			manager, ok := managerMap[foo.Request.Key]
-			if !ok {
-				manager = &fooManager{
-					Chan: make(chan *fooStruct),
-				}
-				managerMap[foo.Request.Key] = manager
-			}
-			managerMtx.Unlock()
-			if !ok {
-				go func(fooChan chan *fooStruct) {
-					for foo := range fooChan {
-						managerMtx.Lock()
-						manager.N++
-						managerMtx.Unlock()
-						response, err := handle(foo.Request, foo.Network, foo.Storage)
-						managerMtx.Lock()
-						manager.N--
-						if manager.N == 0 {
-							close(fooChan)
-							delete(managerMap, foo.Request.Key)
-						}
-						managerMtx.Unlock()
-						foo.Response <- response
-						foo.Err <- err
-					}
-				}(manager.Chan)
-			}
-		}
-	}()
 }
 
 func handle(request *message, network *Network, storage *Storage) (response *message, _ error) {
