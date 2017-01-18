@@ -31,6 +31,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			// It does not exist yet, make it
 			go func() {
 				for handler := range handlerChan {
+					network.stdoutLogger.Printf("handlerChan pull %s", handler.Request.Type)
 					response, err := handle(handler.Request, network, storage)
 					go func(handler *handlerStruct) {
 						handler.Response <- response
@@ -42,11 +43,11 @@ func NewHandler(network *Network, storage *Storage) Handler {
 
 		respChan, errChan := make(chan *message), make(chan error)
 		go func() {
+			network.stdoutLogger.Printf("handlerChan push %s", reqMsg.Type)
 			handlerChan <- &handlerStruct{
 				Request:  reqMsg,
 				Response: respChan,
 				Err:      errChan,
-				Storage:  storage,
 			}
 		}()
 		respMsg, err := <-respChan, <-errChan
@@ -62,10 +63,10 @@ type handlerStruct struct {
 	Request  *message
 	Response chan *message
 	Err      chan error
-	Storage  *Storage
 }
 
 func handle(request *message, network *Network, storage *Storage) (response *message, _ error) {
+	// network.stdoutLogger.Printf("handle %s", request.Type)
 	getState := func() (*stateStruct, error) {
 		stateBytes, err := storage.Get(request.Key)
 		if err != nil {
