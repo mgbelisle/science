@@ -23,27 +23,28 @@ func NewHandler(network *Network, storage *Storage) Handler {
 		handlerChanMapMtx.Lock()
 		handlerChan, ok := handlerChanMap[reqMsg.Key]
 		if !ok {
+			// It does not exist yet, make it
 			handlerChan = make(chan *handlerStruct)
 			handlerChanMap[reqMsg.Key] = handlerChan
 		}
 		handlerChanMapMtx.Unlock()
 		if !ok {
-			// It does not exist yet, make it
+			// Start a goroutine for it
 			go func() {
 				for handler := range handlerChan {
-					network.stdoutLogger.Printf("handlerChan pull %s", handler.Request.Type)
+					network.stdoutLogger.Printf("handlerChan start %s", handler.Request.Type)
 					response, err := handle(handler.Request, network, storage)
 					go func(handler *handlerStruct) {
 						handler.Response <- response
 						handler.Err <- err
 					}(handler)
+					network.stdoutLogger.Printf("handlerChan finish %s", handler.Request.Type)
 				}
 			}()
 		}
 
 		respChan, errChan := make(chan *message), make(chan error)
 		go func() {
-			network.stdoutLogger.Printf("handlerChan push %s", reqMsg.Type)
 			handlerChan <- &handlerStruct{
 				Request:  reqMsg,
 				Response: respChan,
