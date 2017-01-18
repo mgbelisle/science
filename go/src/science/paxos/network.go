@@ -11,35 +11,36 @@ func NewNetwork() *Network {
 	handlerChan := make(chan *handlerStruct)
 	go func() {
 		managerMap := map[uint64]*handlerManager{}
-		managerMtx := &sync.Mutex{}
+		managerMapMtx := &sync.Mutex{}
 		for handler := range handlerChan {
-			managerMtx.Lock()
+			managerMapMtx.Lock()
 			manager, ok := managerMap[handler.Request.Key]
 			if !ok {
 				manager = &handlerManager{
-					Chan: make(chan *handlerStruct),
+					Chan:  make(chan *handlerStruct),
+					Mutex: &sync.Mutex{},
 				}
 				managerMap[handler.Request.Key] = manager
 			}
-			managerMtx.Unlock()
+			managerMapMtx.Unlock()
 			if !ok {
-				go func(handlerChan chan *handlerStruct) {
-					for handler := range handlerChan {
-						managerMtx.Lock()
+				go func(manager *handlerManager) {
+					for handler := range manager.Chan {
+						manager.Mutex.Lock()
 						manager.N++
-						managerMtx.Unlock()
+						manager.Mutex.Unlock()
 						response, err := handle(handler.Request, handler.Network, handler.Storage)
-						managerMtx.Lock()
+						manager.Mutex.Lock()
 						manager.N--
 						if manager.N == 0 {
 							close(handlerChan)
 							delete(managerMap, handler.Request.Key)
 						}
-						managerMtx.Unlock()
+						manager.Mutex.Unlock()
 						handler.Response <- response
 						handler.Err <- err
 					}
-				}(manager.Chan)
+				}(manager)
 			}
 		}
 	}()

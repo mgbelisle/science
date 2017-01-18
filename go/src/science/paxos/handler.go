@@ -40,8 +40,9 @@ type handlerStruct struct {
 }
 
 type handlerManager struct {
-	Chan chan *handlerStruct
-	N    uint64
+	Chan  chan *handlerStruct
+	N     uint64
+	Mutex *sync.Mutex
 }
 
 func handle(request *message, network *Network, storage *Storage) (response *message, _ error) {
