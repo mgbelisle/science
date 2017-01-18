@@ -27,6 +27,19 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			handlerChanMap[reqMsg.Key] = handlerChan
 		}
 		handlerChanMapMtx.Unlock()
+		if !ok {
+			// It does not exist yet, make it
+			go func() {
+				for handler := range handlerChan {
+					response, err := handle(handler.Request, network, storage)
+					go func(handler *handlerStruct) {
+						handler.Response <- response
+						handler.Err <- err
+					}(handler)
+				}
+			}()
+		}
+
 		respChan, errChan := make(chan *message), make(chan error)
 		go func() {
 			handlerChan <- &handlerStruct{
@@ -36,26 +49,6 @@ func NewHandler(network *Network, storage *Storage) Handler {
 				Storage:  storage,
 			}
 		}()
-		if !ok {
-			// Doesn't exist, start a goroutine that pulls from the channel and cleans
-			// up after itself
-			go func() {
-				select {
-				case handler := <-handlerChan:
-					response, err := handle(handler.Request, network, storage)
-					handler.Response <- response
-					handler.Err <- err
-				default:
-					network.stdoutLogger.Printf("Closed channel for %d", reqMsg.Key)
-					handlerChanMapMtx.Lock()
-					delete(handlerChanMap, reqMsg.Key)
-					close(handlerChan)
-					handlerChanMapMtx.Unlock()
-					return
-				}
-			}()
-		}
-
 		respMsg, err := <-respChan, <-errChan
 		if err != nil {
 			return nil, err
