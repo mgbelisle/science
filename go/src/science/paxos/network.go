@@ -30,7 +30,7 @@ func NewNetwork() *Network {
 			}
 			managerMapMtx.Unlock()
 			if !ok {
-				go func(manager *handlerManager) {
+				go func() {
 					for handler := range manager.Chan {
 						manager.Mutex.Lock()
 						manager.N++
@@ -46,11 +46,11 @@ func NewNetwork() *Network {
 						handler.Response <- response
 						handler.Err <- err
 					}
-				}(manager)
+				}()
 			}
-			go func(handler *handlerStruct, manager *handlerManager) {
+			go func(handler *handlerStruct) {
 				manager.Chan <- handler
-			}(handler, manager)
+			}(handler)
 		}
 	}()
 

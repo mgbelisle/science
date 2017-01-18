@@ -3,6 +3,7 @@ package paxos
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sync"
 )
 
@@ -15,13 +16,16 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			return nil, err
 		}
 		respChan, errChan := make(chan *message), make(chan error)
-		network.handlerChan <- &handlerStruct{
-			Request:  reqMsg,
-			Response: respChan,
-			Err:      errChan,
-			Storage:  storage,
-		}
+		go func() {
+			network.handlerChan <- &handlerStruct{
+				Request:  reqMsg,
+				Response: respChan,
+				Err:      errChan,
+				Storage:  storage,
+			}
+		}()
 		respMsg, err := <-respChan, <-errChan
+		log.Printf("bar")
 		if err != nil {
 			return nil, err
 		}
