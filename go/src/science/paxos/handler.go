@@ -92,10 +92,18 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 		}
 		state, err := &stateStruct{}, error(nil)
 		if 0 < len(stateBytes) {
-			err := json.Unmarshal(stateBytes, state)
+			err = json.Unmarshal(stateBytes, state)
 		}
 		return state, err
 	}
+	putState := func(state *stateStruct) error {
+		stateBytes, err := json.Marshal(state)
+		if err != nil {
+			return err
+		}
+		return storage.Put(request.Key, stateBytes)
+	}
+
 	switch request.Type {
 	case readType:
 		// TODO
@@ -105,12 +113,13 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 			// Phase 1
 			state, err := getState()
 			if err != nil {
-				network.stderrLogger.Printf("%v", err)
+				network.stderrLogger.Print(err)
 				continue
 			}
 			state.N++
-			if err := storage.Put(request.Key, encodeState(state)); err != nil {
-				return nil, err
+			if err := putState(state); err != nil {
+				network.stderrLogger.Print(err)
+				continue
 			}
 			phase1 := encodeMessage(&message{
 				Type: phase1Type,
@@ -152,9 +161,9 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 			}
 
 			// Phase 2
-			state, err = getState()
+			state, err = getState() // State changed when it handled phase 1
 			if err != nil {
-				network.stderrLogger.Printf("%v", err)
+				network.stderrLogger.Print(err)
 				continue
 			}
 			value := request.Value
@@ -175,7 +184,7 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 					defer wg.Add(-1)
 					if _, err := node.handler(phase2); err != nil {
 						network.stderrLogger.Printf("Failed phase 2: %v", err)
-						continue
+						return
 					}
 					mtx.Lock()
 					numResponses++
@@ -197,11 +206,10 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 		if state.PromisedN < request.N {
 			network.stdoutLogger.Printf("Promised N=%d", request.N)
 			state.PromisedN = request.N
-			// TODO: Put state
 			return &message{
 				N:     state.AcceptedN,
 				Value: state.Value,
-			}, nil
+			}, putState(state)
 		}
 		return nil, fmt.Errorf("Cannot accept N=%d, already promised N=%d", request.N, state.PromisedN)
 	case phase2Type:
@@ -215,8 +223,7 @@ func handle(request *message, network *Network, storage *Storage) (response *mes
 		network.stdoutLogger.Printf("Accepted N=%d value=%s", request.N, request.Value)
 		state.AcceptedN = request.N
 		state.Value = request.Value
-		// TODO: Put state
-		return nil, nil
+		return nil, putState(state)
 	}
 	return nil, fmt.Errorf("Illegal type: %s", request.Type)
 }

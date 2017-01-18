@@ -30,10 +30,10 @@ func main() {
 	flag.Parse()
 	network := paxos.NewNetwork()
 	if *verboseFlag {
-		paxos.SetLoggers(network, os.Stdout, os.Stderr)
+		paxos.SetLoggers(network, log.New(os.Stdout, "", log.LstdFlags), log.New(os.Stderr, "", log.LstdFlags))
 	}
-	nodes := map[string]paxos.Node{}
-	wg := sync.WaitGroup{}
+	nodes := map[string]*paxos.Node{}
+	wg := &sync.WaitGroup{}
 
 	// Awesome scenario: Five spies must coordinate a meetup. If they show up at different spots
 	// then they die, and their communication channels are slow and unreliable. Thankfully, they
@@ -46,13 +46,15 @@ func main() {
 		"Franz Krieger":   "Berlin",
 	}
 	for agent := range agents {
-		nodes[agent] = paxos.AddNode(network, paxos.NewNode(paxos.NewHandler(network, paxos.MemoryStorage())))
+		node := paxos.NewNode(paxos.NewHandler(network, paxos.MemoryStorage()))
+		nodes[agent] = node
+		paxos.AddNode(network, node)
 	}
 	for agent, proposal := range agents {
 		wg.Add(1)
 		go func(agent, proposal string) {
 			defer wg.Add(-1)
-			value, err := paxos.Consensus(nodes[agent], []byte(proposal))
+			value, err := paxos.Write(nodes[agent], 0, []byte(proposal))
 			if err != nil {
 				log.Printf("%s error: %v", agent, err)
 				return

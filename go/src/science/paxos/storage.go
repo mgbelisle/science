@@ -1,8 +1,8 @@
 package paxos
 
 type Storage struct {
-	Get func(uint64) ([]byte, error)
-	Put func(uint64, []byte) error
+	Get func(key uint64) (value []byte, _ error)
+	Put func(key uint64, value []byte) error
 }
 
 func DiskStorage(dir string) *Storage {
@@ -16,7 +16,7 @@ func DiskStorage(dir string) *Storage {
 	}
 }
 
-// Not durable storage, only use for toy problems
+// Non durable storage, only use for toy problems
 func MemoryStorage() *Storage {
 	m := map[uint64][]byte{}
 	return &Storage{
@@ -28,11 +28,6 @@ func MemoryStorage() *Storage {
 			return nil
 		},
 	}
-}
-
-func encodeState(state *stateStruct) []byte {
-	data, _ := json.Marshal(state)
-	return data
 }
 
 type stateStruct struct {

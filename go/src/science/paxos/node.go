@@ -8,8 +8,12 @@ type Node struct {
 	handler Handler
 }
 
-func Read(node Node, key uint64) ([]byte, error) {
-	respBytes, err := node(encodeMessage(&message{
+func NewNode(handler Handler) *Node {
+	return &Node{handler: handler}
+}
+
+func Read(node *Node, key uint64) ([]byte, error) {
+	respBytes, err := node.handler(encodeMessage(&message{
 		Type: readType,
 		Key:  key,
 	}))
@@ -21,8 +25,8 @@ func Read(node Node, key uint64) ([]byte, error) {
 	return resp.Value, err
 }
 
-func Write(node Node, key uint64, value []byte) ([]byte, error) {
-	respBytes, err := node(encodeMessage(&message{
+func Write(node *Node, key uint64, value []byte) ([]byte, error) {
+	respBytes, err := node.handler(encodeMessage(&message{
 		Type:  writeType,
 		Key:   key,
 		Value: value,
