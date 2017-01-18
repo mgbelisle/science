@@ -11,6 +11,11 @@ const (
 	phase2Type = "phase2"
 )
 
+func encodeMessage(msg *message) []byte {
+	data, _ := json.Marshal(msg)
+	return data
+}
+
 type message struct {
 	Type  string `json:"t"`
 	Key   uint64 `json:"k"`
