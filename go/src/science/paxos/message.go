@@ -7,14 +7,10 @@ import (
 )
 
 const (
-	readRequestType    = "readRequest"
-	readResponseType   = "readResponse"
-	writeRequestType   = "writeRequest"
-	writeResponseType  = "writeResponse"
-	phase1RequestType  = "phase1Request"
-	phase1ResponseType = "phase1Response"
-	phase2RequestType  = "phase2Request"
-	phase2ResponseType = "phase2Response"
+	phase1RequestType = iota
+	phase1ResponseType
+	phase2RequestType
+	phase2ResponseType
 )
 
 func encodeMessage(msg *message) []byte {
@@ -24,12 +20,15 @@ func encodeMessage(msg *message) []byte {
 
 type message struct {
 	ID    string `json:"id"`
-	Type  string `json:"type"`
+	Type  int    `json:"type"`
 	Key   uint64 `json:"key"`
 	N     uint64 `json:"n"`
 	Value []byte `json:"value"`
 	Final bool   `json:"final"`
-	Err   string `json:"err"`
+
+	// For reading/writing
+	ResponseChan chan<- []byte `json:"-"`
+	ErrChan      chan<- error  `json:"-"`
 }
 
 func messageID() string {
