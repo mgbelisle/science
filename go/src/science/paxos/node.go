@@ -1,6 +1,7 @@
 package paxos
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"log"
 )
@@ -31,8 +32,19 @@ func NewNode(channel <-chan []byte, storage *Storage) *Node {
 				if !ok {
 					return // Channel is closed
 				}
-				if len(msgBytes) > 0 {
-
+				msg := &message{}
+				if err := json.Unmarshal(msgBytes, msg); err != nil {
+					node.stderrLogger.Print(err)
+					continue
+				}
+				switch msg.Type {
+				case phase1RequestType:
+				case phase1ResponseType:
+				case phase2RequestType:
+				case phase2ResponseType:
+				default:
+					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
+					continue
 				}
 			case msg := <-readChan:
 				msg.ResponseChan <- nil
