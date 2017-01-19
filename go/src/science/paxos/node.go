@@ -7,18 +7,35 @@ import (
 )
 
 type Node struct {
-	channel      <-chan []byte
+	channel      chan<- []byte
 	readChan     chan<- *message
 	writeChan    chan<- *message
 	stdoutLogger *log.Logger
 	stderrLogger *log.Logger
 }
 
-func NewNode(channel <-chan []byte, storage *Storage) *Node {
+func RemoteNode(channel chan<- []byte) *Node {
+	return &Node{
+		channel:      channel,
+		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+	}
+}
+
+func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node {
+	// Everything from channel goes into channel2
+	channel2 := make(chan []byte)
+	go func() {
+		for msgBytes := range channel {
+			channel2 <- msgBytes
+		}
+		close(channel2)
+	}()
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
+
 	node := &Node{
-		channel:      channel,
+		channel:      channel2,
 		readChan:     readChan,
 		writeChan:    writeChan,
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
@@ -28,7 +45,7 @@ func NewNode(channel <-chan []byte, storage *Storage) *Node {
 	go func() {
 		for {
 			select {
-			case msgBytes, ok := <-channel:
+			case msgBytes, ok := <-channel2:
 				if !ok {
 					return // Channel is closed
 				}
@@ -39,6 +56,11 @@ func NewNode(channel <-chan []byte, storage *Storage) *Node {
 				}
 				switch msg.Type {
 				case phase1RequestType:
+					for node := range network.nodes {
+						go func(node *Node) {
+							node.channel <- encodeMessage(&message{})
+						}(node)
+					}
 				case phase1ResponseType:
 				case phase2RequestType:
 				case phase2ResponseType:
