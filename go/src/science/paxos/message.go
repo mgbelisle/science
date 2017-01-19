@@ -1,14 +1,20 @@
 package paxos
 
 import (
+	"crypto/rand"
 	"encoding/json"
+	"fmt"
 )
 
 const (
-	readType   = "read"
-	writeType  = "write"
-	phase1Type = "phase1"
-	phase2Type = "phase2"
+	readRequestType    = "readRequest"
+	readResponseType   = "readResponse"
+	writeRequestType   = "writeRequest"
+	writeResponseType  = "writeResponse"
+	phase1RequestType  = "phase1Request"
+	phase1ResponseType = "phase1Response"
+	phase2RequestType  = "phase2Request"
+	phase2ResponseType = "phase2Response"
 )
 
 func encodeMessage(msg *message) []byte {
@@ -17,9 +23,16 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Type  string `json:"t"`
-	Key   uint64 `json:"k"`
+	ID    string `json:"id"`
+	Type  string `json:"type"`
+	Key   uint64 `json:"key"`
 	N     uint64 `json:"n"`
-	Value []byte `json:"v"`
-	Final bool   `json:"f"`
+	Value []byte `json:"value"`
+	Final bool   `json:"final"`
+}
+
+func messageID() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
