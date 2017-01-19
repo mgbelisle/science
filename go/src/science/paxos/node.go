@@ -41,6 +41,24 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
+	getState := func(msg *message) (*stateStruct, error) {
+		stateBytes, err := storage.Get(msg.Key)
+		if err != nil {
+			return nil, err
+		}
+		state, err := &stateStruct{}, error(nil)
+		if len(stateBytes) > 0 {
+			err = json.Unmarshal(stateBytes, err)
+		}
+		return state, err
+	}
+	putState := func(state *stateStruct, msg *message) error {
+		stateBytes, err := json.Marshal(state)
+		if err != nil {
+			return err
+		}
+		return storage.Put(msg.Key, stateBytes)
+	}
 
 	go func() {
 		for {
@@ -49,6 +67,7 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				if !ok {
 					return // Channel is closed
 				}
+
 				msg := &message{}
 				if err := json.Unmarshal(msgBytes, msg); err != nil {
 					node.stderrLogger.Print(err)
@@ -56,11 +75,6 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				}
 				switch msg.Type {
 				case phase1RequestType:
-					for node := range network.nodes {
-						go func(node *Node) {
-							node.channel <- encodeMessage(&message{})
-						}(node)
-					}
 				case phase1ResponseType:
 				case phase2RequestType:
 				case phase2ResponseType:
@@ -72,8 +86,32 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				msg.ResponseChan <- nil
 				msg.ErrChan <- nil
 			case msg := <-writeChan:
-				msg.ResponseChan <- nil
-				msg.ErrChan <- nil
+				// Paxos itself, keep trying rounds until successful
+				for {
+					state, err := getState(msg)
+					if err != nil {
+						node.stderrLogger.Print(err)
+						continue
+					}
+					state.N++
+					if err := putState(state, msg); err != nil {
+						node.stderrLogger.Print(err)
+						continue
+					}
+					for node := range network.nodes {
+						msgID := messageID()
+						go func(node *Node) {
+							node.channel <- encodeMessage(&message{
+								ID:   msgID,
+								Type: phase1RequestType,
+								N:    state.N,
+							})
+						}(node)
+					}
+					msg.ResponseChan <- nil
+					msg.ErrChan <- nil
+					break
+				}
 			}
 		}
 	}()
