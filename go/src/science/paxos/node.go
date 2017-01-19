@@ -61,6 +61,7 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 	}
 
 	go func() {
+		writeMap := map[string]*message{}
 		for {
 			select {
 			case msgBytes, ok := <-channel2:
@@ -80,37 +81,33 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				case phase2ResponseType:
 				default:
 					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
-					continue
 				}
 			case msg := <-readChan:
 				msg.ResponseChan <- nil
 				msg.ErrChan <- nil
 			case msg := <-writeChan:
-				// Paxos itself, keep trying rounds until successful
-				for {
-					state, err := getState(msg)
-					if err != nil {
-						node.stderrLogger.Print(err)
-						continue
-					}
-					state.N++
-					if err := putState(state, msg); err != nil {
-						node.stderrLogger.Print(err)
-						continue
-					}
-					for node := range network.nodes {
-						msgID := messageID()
-						go func(node *Node) {
-							node.channel <- encodeMessage(&message{
-								ID:   msgID,
-								Type: phase1RequestType,
-								N:    state.N,
-							})
-						}(node)
-					}
+				state, err := getState(msg)
+				if err != nil {
 					msg.ResponseChan <- nil
-					msg.ErrChan <- nil
-					break
+					msg.ErrChan <- err
+					continue
+				}
+				state.N++
+				if err := putState(state, msg); err != nil {
+					msg.ResponseChan <- nil
+					msg.ErrChan <- err
+					continue
+				}
+				writeMap[msg.ID] = msg
+				for node := range network.nodes {
+					msgID := messageID()
+					go func(node *Node) {
+						node.channel <- encodeMessage(&message{
+							ID:   msgID,
+							Type: phase1RequestType,
+							N:    state.N,
+						})
+					}(node)
 				}
 			}
 		}
