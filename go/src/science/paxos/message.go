@@ -29,6 +29,7 @@ type message struct {
 	N     uint64 `json:"n"`
 	Value []byte `json:"value"`
 	Final bool   `json:"final"`
+	Err   string `json:"err"`
 }
 
 func messageID() string {
