@@ -33,7 +33,6 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 	}()
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
-
 	node := &Node{
 		channel:      channel2,
 		readChan:     readChan,
@@ -41,27 +40,29 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
-	getState := func(msg *message) (*stateStruct, error) {
-		stateBytes, err := storage.Get(msg.Key)
-		if err != nil {
-			return nil, err
-		}
-		state, err := &stateStruct{}, error(nil)
-		if len(stateBytes) > 0 {
-			err = json.Unmarshal(stateBytes, err)
-		}
-		return state, err
-	}
-	putState := func(state *stateStruct, msg *message) error {
-		stateBytes, err := json.Marshal(state)
-		if err != nil {
-			return err
-		}
-		return storage.Put(msg.Key, stateBytes)
-	}
 
 	go func() {
-		writeMap := map[string]*message{}
+		writeToMessageMap := map[string]*message{}
+		writeTo
+		getState := func(msg *message) (*stateStruct, error) {
+			stateBytes, err := storage.Get(msg.Key)
+			if err != nil {
+				return nil, err
+			}
+			state, err := &stateStruct{}, error(nil)
+			if len(stateBytes) > 0 {
+				err = json.Unmarshal(stateBytes, err)
+			}
+			return state, err
+		}
+		putState := func(state *stateStruct, msg *message) error {
+			stateBytes, err := json.Marshal(state)
+			if err != nil {
+				return err
+			}
+			return storage.Put(msg.Key, stateBytes)
+		}
+
 		for {
 			select {
 			case msgBytes, ok := <-channel2:
@@ -79,6 +80,7 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				case phase1ResponseType:
 				case phase2RequestType:
 				case phase2ResponseType:
+
 				default:
 					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}
@@ -98,12 +100,11 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 					msg.ErrChan <- err
 					continue
 				}
-				writeMap[msg.ID] = msg
+				writeToMessageMap[msg.ID] = msg
 				for node := range network.nodes {
-					msgID := messageID()
 					go func(node *Node) {
 						node.channel <- encodeMessage(&message{
-							ID:   msgID,
+							ID:   msg.ID,
 							Type: phase1RequestType,
 							N:    state.N,
 						})
