@@ -56,7 +56,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 				return nil, err
 			}
 			state, err := &stateStruct{}, error(nil)
-			if len(stateBytes) > 0 {
+			if 0 < len(stateBytes) {
 				err = json.Unmarshal(stateBytes, err)
 			}
 			return state, err
@@ -101,6 +101,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 								OpID:   msg.OpID,
 								Type:   phase1ResponseType,
 								N:      state.AcceptedN,
+								Key:    msg.Key,
 								Value:  state.Value,
 							})
 						}()
@@ -132,8 +133,8 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 										Sender: id,
 										OpID:   msg.OpID,
 										Type:   phase2RequestType,
-										Key:    msg.Key,
 										N:      state.N,
+										Key:    msg.Key,
 										Value:  state.Value,
 									})
 								}(node2)
@@ -209,6 +210,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 							OpID:   msg.OpID,
 							Type:   phase1RequestType,
 							N:      state.N,
+							Key:    msg.Key,
 						})
 					}(node2)
 				}
