@@ -45,7 +45,8 @@ func main() {
 	for agent := range agents {
 		node := paxos.LocalNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
 		if *verboseFlag {
-			paxos.SetLoggers(node, log.New(os.Stdout, agent, log.LstdFlags), log.New(os.Stderr, agent, log.LstdFlags))
+			prefix := agent + " "
+			paxos.SetLoggers(node, log.New(os.Stdout, prefix, log.LstdFlags), log.New(os.Stderr, prefix, log.LstdFlags))
 		}
 		nodes[agent] = node
 		paxos.AddNode(network, node)

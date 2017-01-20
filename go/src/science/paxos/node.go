@@ -132,6 +132,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 										Sender: id,
 										OpID:   msg.OpID,
 										Type:   phase2RequestType,
+										Key:    msg.Key,
 										N:      state.N,
 										Value:  state.Value,
 									})
@@ -140,7 +141,44 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						}
 					}
 				case phase2RequestType:
+					state, err := getState(msg.Key)
+					if err != nil {
+						node.stderrLogger.Print(err)
+						continue
+					}
+					if state.PromisedN <= msg.N {
+						state.AcceptedN = msg.N
+						state.Value = msg.Value
+						if err := putState(msg.Key, state); err != nil {
+							node.stdoutLogger.Print(err)
+							continue
+						}
+						node.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
+						go func() {
+							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Sender: id,
+								OpID:   msg.OpID,
+								Type:   phase2ResponseType,
+								Key:    msg.Key,
+								Value:  msg.Value,
+							})
+						}()
+					}
 				case phase2ResponseType:
+					if waitingMap, ok := opToP2WaitingMap[msg.OpID]; ok {
+						delete(waitingMap, msg.Sender)
+						if n, w := len(network.nodes), len(waitingMap); w < n-w {
+							// Majority have responded
+							delete(opToP2WaitingMap, msg.OpID)
+
+							opMsg := opToMsgMap[msg.OpID]
+							delete(opToMsgMap, msg.OpID)
+							go func() {
+								opMsg.ResponseChan <- msg.Value
+								opMsg.ErrChan <- nil
+							}()
+						}
+					}
 				default:
 					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}
