@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	readType   = "read"
-	writeType  = "write"
-	phase1Type = "phase1"
-	phase2Type = "phase2"
+	readType = iota
+	writeType
+	phase1Type
+	phase2Type
 )
 
 func encodeMessage(msg *message) []byte {
@@ -17,9 +17,9 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Type  string `json:"t"`
-	Key   uint64 `json:"k"`
+	Type  int    `json:"type"`
+	Key   uint64 `json:"key"`
 	N     uint64 `json:"n"`
-	Value []byte `json:"v"`
-	Final bool   `json:"f"`
+	Value []byte `json:"value"`
+	Final bool   `json:"final"`
 }

@@ -9,37 +9,19 @@ import (
 type Handler func(request []byte) (response []byte, _ error)
 
 func NewHandler(network *Network, storage *Storage) Handler {
-	mtxMap := map[uint64]*sync.Mutex{} // One mutex per key
-	mtxMapMtx := &sync.Mutex{}
-	getMutex := func(key uint64) *sync.Mutex {
-		mtxMapMtx.Lock()
-		defer mtxMapMtx.Unlock()
-		mtx, ok := mtxMap[key]
-		if !ok {
-			mtx = &sync.Mutex{}
-			mtxMap[key] = mtx
-		}
-		return mtx
-	}
+	stateMtx := &sync.Mutex{}
 	getState := func(key uint64) (*stateStruct, error) {
-		mtx := getMutex(key)
-		mtx.Lock()
 		stateBytes, err := storage.Get(key)
 		if err != nil {
-			defer mtx.Unlock()
 			return nil, err
 		}
-		state := &stateStruct{}
+		state, err := &stateStruct{}, error(nil)
 		if 0 < len(stateBytes) {
-			if err := json.Unmarshal(stateBytes, state); err != nil {
-				defer mtx.Unlock()
-				return state, err
-			}
+			err = json.Unmarshal(stateBytes, state)
 		}
-		return state, nil
+		return state, err
 	}
 	putState := func(key uint64, state *stateStruct) error {
-		defer getMutex(key).Unlock()
 		stateBytes, err := json.Marshal(state)
 		if err != nil {
 			return err
@@ -60,20 +42,27 @@ func NewHandler(network *Network, storage *Storage) Handler {
 			// Paxos itself, keep trying rounds until successful
 			for {
 				// Phase 1
-				state, err := getState(reqMsg.Key)
+				phase1, err := func() ([]byte, error) {
+					stateMtx.Lock()
+					defer stateMtx.Unlock()
+					state, err := getState(reqMsg.Key)
+					if err != nil {
+						return nil, err
+					}
+					state.N++
+					if err := putState(reqMsg.Key, state); err != nil {
+						return nil, err
+					}
+					return encodeMessage(&message{
+						Type: phase1Type,
+						N:    state.N,
+					}), nil
+				}()
 				if err != nil {
 					network.stderrLogger.Print(err)
 					continue
 				}
-				state.N++
-				if err := putState(reqMsg.Key, state); err != nil {
-					network.stderrLogger.Print(err)
-					continue
-				}
-				phase1 := encodeMessage(&message{
-					Type: phase1Type,
-					N:    state.N,
-				})
+
 				wg := &sync.WaitGroup{}
 				mtx := &sync.Mutex{}
 				alreadyAcceptedN := uint64(0)
@@ -110,12 +99,12 @@ func NewHandler(network *Network, storage *Storage) Handler {
 				}
 
 				// Phase 2
-				state, err = getState() // State changed when it handled phase 1
+				state, err = getState(reqMsg.Key) // State changed when it handled phase 1
 				if err != nil {
 					network.stderrLogger.Print(err)
 					continue
 				}
-				value := request.Value
+				value := reqMsg.Value
 				if 0 < alreadyAcceptedN {
 					value = alreadyAcceptedValue
 				}
@@ -145,7 +134,7 @@ func NewHandler(network *Network, storage *Storage) Handler {
 					network.stderrLogger.Printf("Failed phase 2 on %d/%d", l-numResponses, l)
 					continue
 				}
-				return &message{Value: value}, nil
+				return encodeMessage(&message{Value: value}), nil
 			}
 		case phase1Type:
 			state, err := getState()
