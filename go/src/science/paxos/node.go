@@ -90,7 +90,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 							node.stderrLogger.Print(err)
 							continue
 						}
-						node.stdoutLogger.Printf("%s promised N=%d to %s", id, msg.N, msg.Sender)
+						node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
 								Sender: id,
