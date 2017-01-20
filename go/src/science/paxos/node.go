@@ -45,7 +45,11 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 	}
 
 	go func() {
-		ops := map[string]*message{} // {opId: msg}
+		opToMsgMap := map[string]*message{} // {opId: msg}
+		opToP1AcceptedNMap := map[string]uint64{}
+		opToP1AcceptedValueMap := map[string][]byte{}
+		opToP1WaitingMap := map[string]map[string]struct{}{}
+		opToP2WaitingMap := map[string]map[string]struct{}{}
 		getState := func(key uint64) (*stateStruct, error) {
 			stateBytes, err := storage.Get(key)
 			if err != nil {
@@ -102,6 +106,39 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						}()
 					}
 				case phase1ResponseType:
+					if waitingMap, ok := opToP1WaitingMap[msg.OpID]; ok {
+						if opToP1AcceptedNMap[msg.OpID] < msg.N {
+							opToP1AcceptedNMap[msg.OpID] = msg.N
+							opToP1AcceptedValueMap[msg.OpID] = msg.Value
+						}
+						delete(waitingMap, msg.Sender)
+						if n, w := len(network.nodes), len(waitingMap); w < n-w {
+							// Majority have responded, cleanup and send phase 2
+							delete(opToP1WaitingMap, msg.OpID)
+							delete(opToP1AcceptedNMap, msg.OpID)
+							delete(opToP1AcceptedValueMap, msg.OpID)
+
+							state, err := getState(msg.Key)
+							if err != nil {
+								node.stderrLogger.Print(err)
+								continue
+							}
+							waitingMap2 := map[string]struct{}{}
+							opToP2WaitingMap[msg.OpID] = waitingMap2
+							for id2, node2 := range network.nodes {
+								waitingMap2[id2] = struct{}{}
+								go func(node2 *Node) {
+									node2.channel <- encodeMessage(&message{
+										Sender: id,
+										OpID:   msg.OpID,
+										Type:   phase2RequestType,
+										N:      state.N,
+										Value:  state.Value,
+									})
+								}(node2)
+							}
+						}
+					}
 				case phase2RequestType:
 				case phase2ResponseType:
 				default:
@@ -123,16 +160,19 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 					msg.ErrChan <- err
 					continue
 				}
-				ops[msg.OpID] = msg
-				for _, node := range network.nodes {
-					go func(node *Node) {
-						node.channel <- encodeMessage(&message{
+				opToMsgMap[msg.OpID] = msg
+				waitingMap := map[string]struct{}{}
+				opToP1WaitingMap[msg.OpID] = waitingMap
+				for id2, node2 := range network.nodes {
+					waitingMap[id2] = struct{}{}
+					go func(node2 *Node) {
+						node2.channel <- encodeMessage(&message{
 							Sender: id,
 							OpID:   msg.OpID,
 							Type:   phase1RequestType,
 							N:      state.N,
 						})
-					}(node)
+					}(node2)
 				}
 			}
 		}
