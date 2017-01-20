@@ -45,9 +45,9 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 	}
 
 	go func() {
-		writeToMessageMap := map[string]*message{}
-		getState := func(msg *message) (*stateStruct, error) {
-			stateBytes, err := storage.Get(msg.Key)
+		ops := map[string]*message{} // {opId: msg}
+		getState := func(key uint64) (*stateStruct, error) {
+			stateBytes, err := storage.Get(key)
 			if err != nil {
 				return nil, err
 			}
@@ -57,12 +57,12 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 			}
 			return state, err
 		}
-		putState := func(state *stateStruct, msg *message) error {
+		putState := func(key uint64, state *stateStruct) error {
 			stateBytes, err := json.Marshal(state)
 			if err != nil {
 				return err
 			}
-			return storage.Put(msg.Key, stateBytes)
+			return storage.Put(key, stateBytes)
 		}
 
 		for {
@@ -79,6 +79,28 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 				}
 				switch msg.Type {
 				case phase1RequestType:
+					state, err := getState(msg.Key)
+					if err != nil {
+						node.stderrLogger.Print(err)
+						continue
+					}
+					if state.PromisedN < msg.N {
+						state.PromisedN = msg.N
+						if err := putState(msg.Key, state); err != nil {
+							node.stderrLogger.Print(err)
+							continue
+						}
+						node.stdoutLogger.Printf("%s promised N=%d to %s", id, msg.N, msg.Sender)
+						go func() {
+							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Sender: id,
+								OpID:   msg.OpID,
+								Type:   phase1ResponseType,
+								N:      state.AcceptedN,
+								Value:  state.Value,
+							})
+						}()
+					}
 				case phase1ResponseType:
 				case phase2RequestType:
 				case phase2ResponseType:
@@ -89,25 +111,26 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 				msg.ResponseChan <- nil
 				msg.ErrChan <- nil
 			case msg := <-writeChan:
-				state, err := getState(msg)
+				state, err := getState(msg.Key)
 				if err != nil {
 					msg.ResponseChan <- nil
 					msg.ErrChan <- err
 					continue
 				}
 				state.N++
-				if err := putState(state, msg); err != nil {
+				if err := putState(msg.Key, state); err != nil {
 					msg.ResponseChan <- nil
 					msg.ErrChan <- err
 					continue
 				}
-				writeToMessageMap[msg.ID] = msg
-				for node := range network.nodes {
+				ops[msg.OpID] = msg
+				for _, node := range network.nodes {
 					go func(node *Node) {
 						node.channel <- encodeMessage(&message{
-							ID:   msg.ID,
-							Type: phase1RequestType,
-							N:    state.N,
+							Sender: id,
+							OpID:   msg.OpID,
+							Type:   phase1RequestType,
+							N:      state.N,
 						})
 					}(node)
 				}
@@ -122,6 +145,7 @@ func Read(node *Node, key uint64) ([]byte, error) {
 	respChan, errChan := make(chan []byte), make(chan error)
 	go func() {
 		node.readChan <- &message{
+			OpID:         opID(),
 			Key:          key,
 			ResponseChan: respChan,
 			ErrChan:      errChan,
@@ -134,6 +158,7 @@ func Write(node *Node, key uint64, value []byte) ([]byte, error) {
 	respChan, errChan := make(chan []byte), make(chan error)
 	go func() {
 		node.writeChan <- &message{
+			OpID:         opID(),
 			Key:          key,
 			Value:        value,
 			ResponseChan: respChan,
