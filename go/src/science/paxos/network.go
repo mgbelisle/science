@@ -2,14 +2,14 @@ package paxos
 
 func NewNetwork() *Network {
 	return &Network{
-		nodes: map[*Node]struct{}{},
+		nodes: map[string]*Node{},
 	}
 }
 
 type Network struct {
-	nodes map[*Node]struct{}
+	nodes map[string]*Node
 }
 
 func AddNode(network *Network, node *Node) {
-	network.nodes[node] = struct{}{}
+	network.nodes[node.id] = node
 }

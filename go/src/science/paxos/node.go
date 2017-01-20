@@ -7,6 +7,7 @@ import (
 )
 
 type Node struct {
+	id           string
 	channel      chan<- []byte
 	readChan     chan<- *message
 	writeChan    chan<- *message
@@ -14,15 +15,16 @@ type Node struct {
 	stderrLogger *log.Logger
 }
 
-func RemoteNode(channel chan<- []byte) *Node {
+func RemoteNode(id string, channel chan<- []byte) *Node {
 	return &Node{
+		id:           id,
 		channel:      channel,
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 }
 
-func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node {
+func LocalNode(id string, channel <-chan []byte, network *Network, storage *Storage) *Node {
 	// Everything from channel goes into channel2
 	channel2 := make(chan []byte)
 	go func() {
@@ -34,6 +36,7 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
 	node := &Node{
+		id:           id,
 		channel:      channel2,
 		readChan:     readChan,
 		writeChan:    writeChan,
@@ -43,7 +46,6 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 
 	go func() {
 		writeToMessageMap := map[string]*message{}
-		writeTo
 		getState := func(msg *message) (*stateStruct, error) {
 			stateBytes, err := storage.Get(msg.Key)
 			if err != nil {
@@ -80,7 +82,6 @@ func LocalNode(network *Network, channel <-chan []byte, storage *Storage) *Node 
 				case phase1ResponseType:
 				case phase2RequestType:
 				case phase2ResponseType:
-
 				default:
 					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}

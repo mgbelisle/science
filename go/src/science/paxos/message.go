@@ -19,12 +19,13 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	ID    string `json:"id"`
-	Type  int    `json:"type"`
-	Key   uint64 `json:"key"`
-	N     uint64 `json:"n"`
-	Value []byte `json:"value"`
-	Final bool   `json:"final"`
+	Sender string `json:"sender"`
+	ID     string `json:"id"`
+	Type   int    `json:"type"`
+	Key    uint64 `json:"key"`
+	N      uint64 `json:"n"`
+	Value  []byte `json:"value"`
+	Final  bool   `json:"final"`
 
 	// For reading/writing
 	ResponseChan chan<- []byte `json:"-"`
