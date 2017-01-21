@@ -20,19 +20,19 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Sender string `json:"sender"`
-	OpID   string `json:"opId"`
-	Type   int    `json:"type"`
-	Key    uint64 `json:"key"`
-	N      uint64 `json:"n"`
-	Value  []byte `json:"value"`
+	Sender    string `json:"sender"`
+	RequestID string `json:"requestId"`
+	Type      int    `json:"type"`
+	Key       uint64 `json:"key"`
+	N         uint64 `json:"n"`
+	Value     []byte `json:"value"`
 
 	// For reading/writing
 	ResponseChan chan<- []byte `json:"-"`
 	ErrChan      chan<- error  `json:"-"`
 }
 
-func opID() string {
+func requestID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return fmt.Sprintf("%x", b)
