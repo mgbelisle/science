@@ -13,3 +13,10 @@ type Network struct {
 func AddNode(network *Network, node *Node) {
 	network.nodes[node.id] = node
 }
+
+func AddRemoteNode(network *Network, id string, channel chan<- []byte) {
+	network.nodes[id] = &Node{
+		id:      id,
+		channel: channel,
+	}
+}

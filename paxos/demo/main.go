@@ -43,7 +43,7 @@ func main() {
 		"Franz Krieger  ": "Berlin        ",
 	}
 	for agent := range agents {
-		node := paxos.LocalNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
+		node := paxos.NewNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
 		if *verboseFlag {
 			prefix := agent + " "
 			paxos.SetLoggers(node, log.New(os.Stdout, prefix, log.LstdFlags), log.New(os.Stderr, prefix, log.LstdFlags))

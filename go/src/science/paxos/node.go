@@ -15,14 +15,7 @@ type Node struct {
 	stderrLogger *log.Logger
 }
 
-func RemoteNode(id string, channel chan<- []byte) *Node {
-	return &Node{
-		id:      id,
-		channel: channel,
-	}
-}
-
-func LocalNode(id string, channel <-chan []byte, network *Network, storage *Storage) *Node {
+func NewNode(id string, channel <-chan []byte, network *Network, storage *Storage) *Node {
 	// Everything from channel goes into channel2
 	channel2 := make(chan []byte)
 	go func() {
