@@ -99,7 +99,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 							node.stderrLogger.Print(err)
 							continue
 						}
-						node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
+						// node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
 								Sender:    id,
@@ -149,10 +149,10 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						state.AcceptedN = msg.N
 						state.Value = msg.Value
 						if err := putState(msg.Key, state); err != nil {
-							node.stdoutLogger.Print(err)
+							node.stderrLogger.Print(err)
 							continue
 						}
-						node.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
+						// node.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
 								Sender:    id,
@@ -188,7 +188,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 							msg2.ErrChan <- nil
 						}(msg2)
 					}
-					node.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
+					// node.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
 
 					if err := putState(msg.Key, &stateStruct{
 						Value: msg.Value,

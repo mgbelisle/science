@@ -34,13 +34,13 @@ func main() {
 
 	// Awesome scenario: Five spies must coordinate a meetup. If they show up at different spots
 	// then they die, and their communication channels are slow and unreliable. Thankfully, they
-	// all understand the paxos protocol perfectly.
+	// all understand the paxos algorithm perfectly.
 	agents := map[string]string{
-		"Ethan Hunt     ": "Tokyo         ",
-		"Jim Phelps     ": "Vegas         ",
+		"Ethan Hunt":      "Tokyo",
+		"Jim Phelps":      "Vegas",
 		"Luther Stickell": "Rio de Janeiro",
-		"Jack Harmon    ": "Shanghai      ",
-		"Franz Krieger  ": "Berlin        ",
+		"Jack Harmon":     "Shanghai",
+		"Franz Krieger":   "Berlin",
 	}
 	for agent := range agents {
 		node := paxos.NewNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
