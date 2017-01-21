@@ -57,7 +57,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 			}
 			state, err := &stateStruct{}, error(nil)
 			if 0 < len(stateBytes) {
-				err = json.Unmarshal(stateBytes, err)
+				err = json.Unmarshal(stateBytes, state)
 			}
 			return state, err
 		}
