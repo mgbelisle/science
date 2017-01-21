@@ -96,19 +96,17 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						}
 						node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
-							node.stdoutLogger.Printf("foo")
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
 								Sender: id,
 								OpID:   msg.OpID,
 								Type:   phase1ResponseType,
-								N:      state.N,
+								N:      state.AcceptedN,
 								Key:    msg.Key,
 								Value:  state.Value,
 							})
 						}()
 					}
 				case phase1ResponseType:
-					node.stdoutLogger.Printf("bar")
 					if waitingMap, ok := opToP1WaitingMap[msg.OpID]; ok {
 						if opToP1AcceptedNMap[msg.OpID] < msg.N {
 							opToP1AcceptedNMap[msg.OpID] = msg.N
@@ -155,7 +153,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						continue
 					}
 					if state.PromisedN <= msg.N {
-						state.N = msg.N
+						state.AcceptedN = msg.N
 						state.Value = msg.Value
 						if err := putState(msg.Key, state); err != nil {
 							node.stdoutLogger.Print(err)

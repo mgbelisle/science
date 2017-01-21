@@ -32,7 +32,8 @@ func MemoryStorage() *Storage {
 
 type stateStruct struct {
 	N         uint64 `json:"n"`
-	PromisedN uint64 `json:"promisedN"`
-	Value     []byte `json:"value"`
-	Final     bool   `json:"final"`
+	PromisedN uint64 `json:"pn"`
+	AcceptedN uint64 `json:"an"`
+	Value     []byte `json:"v"`
+	Final     bool   `json:"f"`
 }
