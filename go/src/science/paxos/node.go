@@ -17,10 +17,8 @@ type Node struct {
 
 func RemoteNode(id string, channel chan<- []byte) *Node {
 	return &Node{
-		id:           id,
-		channel:      channel,
-		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
-		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
+		id:      id,
+		channel: channel,
 	}
 }
 
