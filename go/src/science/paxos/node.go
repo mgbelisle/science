@@ -76,19 +76,31 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 					return // Channel is closed
 				}
 
-				// node.stdoutLogger.Printf("%s", msgBytes)
 				msg := &message{}
 				if err := json.Unmarshal(msgBytes, msg); err != nil {
 					node.stderrLogger.Print(err)
 					continue
 				}
+
+				// Get the state
+				state, err := getState(msg.Key)
+				if err != nil {
+					node.stderrLogger.Print(err)
+					continue
+				}
+				if state.Final {
+					go func() {
+						network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							Type:  finalType,
+							Key:   msg.Key,
+							Value: state.Value,
+						})
+					}()
+					continue
+				}
+
 				switch msg.Type {
 				case phase1RequestType:
-					state, err := getState(msg.Key)
-					if err != nil {
-						node.stderrLogger.Print(err)
-						continue
-					}
 					if state.PromisedN < msg.N {
 						state.PromisedN = msg.N
 						if err := putState(msg.Key, state); err != nil {
@@ -125,11 +137,6 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 							delete(opToP1AcceptedNMap, msg.OpID)
 							delete(opToP1AcceptedValueMap, msg.OpID)
 
-							state, err := getState(msg.Key)
-							if err != nil {
-								node.stderrLogger.Print(err)
-								continue
-							}
 							waitingMap2 := map[string]struct{}{}
 							opToP2WaitingMap[msg.OpID] = waitingMap2
 							for id2, node2 := range network.nodes {
@@ -148,11 +155,6 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						}
 					}
 				case phase2RequestType:
-					state, err := getState(msg.Key)
-					if err != nil {
-						node.stderrLogger.Print(err)
-						continue
-					}
 					if state.PromisedN <= msg.N {
 						state.AcceptedN = msg.N
 						state.Value = msg.Value
@@ -184,7 +186,23 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 								opMsg.ResponseChan <- msg.Value
 								opMsg.ErrChan <- nil
 							}()
+							for _, node2 := range network.nodes {
+								go func(node2 *Node) {
+									node2.channel <- encodeMessage(&message{
+										Type:  finalType,
+										Key:   opMsg.Key,
+										Value: opMsg.Value,
+									})
+								}(node2)
+							}
 						}
+					}
+				case finalType:
+					if err := putState(msg.Key, &stateStruct{
+						Value: msg.Value,
+						Final: true,
+					}); err != nil {
+						node.stderrLogger.Print(err)
 					}
 				default:
 					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)

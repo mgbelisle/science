@@ -11,6 +11,7 @@ const (
 	phase1ResponseType
 	phase2RequestType
 	phase2ResponseType
+	finalType
 )
 
 func encodeMessage(msg *message) []byte {
@@ -25,7 +26,6 @@ type message struct {
 	Key    uint64 `json:"key"`
 	N      uint64 `json:"n"`
 	Value  []byte `json:"value"`
-	Final  bool   `json:"final"`
 
 	// For reading/writing
 	ResponseChan chan<- []byte `json:"-"`
