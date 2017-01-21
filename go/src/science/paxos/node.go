@@ -221,6 +221,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					continue
 				}
 
+				proposedValueMap[msg.Key] = msg.Value
 				messagesMap, ok := keyToMsgMap[msg.Key]
 				if !ok {
 					messagesMap = map[*message]struct{}{}
