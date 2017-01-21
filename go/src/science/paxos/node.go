@@ -115,6 +115,11 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded, cleanup and send phase 2
+							value := msg.Value
+							if 0 < opToP1AcceptedNMap[msg.OpID] {
+								value = opToP1AcceptedValueMap[msg.OpID]
+							}
+
 							delete(opToP1WaitingMap, msg.OpID)
 							delete(opToP1AcceptedNMap, msg.OpID)
 							delete(opToP1AcceptedValueMap, msg.OpID)
@@ -135,7 +140,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 										Type:   phase2RequestType,
 										N:      state.N,
 										Key:    msg.Key,
-										Value:  state.Value,
+										Value:  value,
 									})
 								}(node2)
 							}
