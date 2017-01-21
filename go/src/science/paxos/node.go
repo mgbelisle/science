@@ -115,7 +115,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded, cleanup and send phase 2
-							value := msg.Value
+							value := opToMsgMap[msg.OpID].Value
 							if 0 < opToP1AcceptedNMap[msg.OpID] {
 								value = opToP1AcceptedValueMap[msg.OpID]
 							}
