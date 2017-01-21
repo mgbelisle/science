@@ -33,7 +33,7 @@ type message struct {
 }
 
 func opID() string {
-	b := make([]byte, 32)
+	b := make([]byte, 16)
 	rand.Read(b)
 	return fmt.Sprintf("%x", b)
 }

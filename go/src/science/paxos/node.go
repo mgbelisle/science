@@ -76,6 +76,7 @@ func LocalNode(id string, channel <-chan []byte, network *Network, storage *Stor
 					return // Channel is closed
 				}
 
+				// node.stdoutLogger.Printf("%s", msgBytes)
 				msg := &message{}
 				if err := json.Unmarshal(msgBytes, msg); err != nil {
 					node.stderrLogger.Print(err)
