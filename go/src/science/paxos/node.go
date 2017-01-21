@@ -40,7 +40,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 		othersAcceptedNMap := map[uint64]uint64{}         // {key: n}
 		othersAcceptedValueMap := map[uint64][]byte{}     // {key: value}
 		proposedValueMap := map[uint64][]byte{}
-		requestIDToWaitingMap := map[string]map[string]struct{}{}
+		reqToWaitingMap := map[string]map[string]struct{}{}
 		getState := func(key uint64) (*stateStruct, error) {
 			stateBytes, err := storage.Get(key)
 			if err != nil {
@@ -66,6 +66,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				if !ok {
 					return // Channel is closed
 				}
+				node.stdoutLogger.Printf("%s", msgBytes)
 
 				msg := &message{}
 				if err := json.Unmarshal(msgBytes, msg); err != nil {
@@ -101,16 +102,17 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
-								Sender: id,
-								Type:   phase1ResponseType,
-								N:      state.AcceptedN,
-								Key:    msg.Key,
-								Value:  state.Value,
+								Sender:    id,
+								Type:      phase1ResponseType,
+								N:         state.AcceptedN,
+								RequestID: msg.RequestID,
+								Key:       msg.Key,
+								Value:     state.Value,
 							})
 						}()
 					}
 				case phase1ResponseType:
-					if waitingMap, ok := requestIDToWaitingMap[msg.RequestID]; ok {
+					if waitingMap, ok := reqToWaitingMap[msg.RequestID]; ok {
 						if othersAcceptedNMap[msg.Key] < msg.N {
 							othersAcceptedNMap[msg.Key] = msg.N
 							othersAcceptedValueMap[msg.Key] = msg.Value
@@ -118,7 +120,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded, cleanup and send phase 2
-							delete(requestIDToWaitingMap, msg.RequestID)
+							delete(reqToWaitingMap, msg.RequestID)
 							value := proposedValueMap[msg.Key]
 							if 0 < othersAcceptedNMap[msg.Key] {
 								value = othersAcceptedValueMap[msg.Key]
@@ -126,7 +128,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 
 							reqID := requestID()
 							waitingMap2 := map[string]struct{}{}
-							requestIDToWaitingMap[reqID] = waitingMap2
+							reqToWaitingMap[reqID] = waitingMap2
 							for id2, node2 := range network.nodes {
 								waitingMap2[id2] = struct{}{}
 								go func(node2 *Node) {
@@ -153,19 +155,20 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						node.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
-								Sender: id,
-								Type:   phase2ResponseType,
-								Key:    msg.Key,
-								Value:  msg.Value,
+								Sender:    id,
+								Type:      phase2ResponseType,
+								RequestID: msg.RequestID,
+								Key:       msg.Key,
+								Value:     msg.Value,
 							})
 						}()
 					}
 				case phase2ResponseType:
-					if waitingMap, ok := requestIDToWaitingMap[msg.RequestID]; ok {
+					if waitingMap, ok := reqToWaitingMap[msg.RequestID]; ok {
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded
-							delete(requestIDToWaitingMap, msg.RequestID)
+							delete(reqToWaitingMap, msg.RequestID)
 
 							for _, node2 := range network.nodes {
 								go func(node2 *Node) {
@@ -226,7 +229,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				messagesMap[msg] = struct{}{}
 				reqID := requestID()
 				waitingMap := map[string]struct{}{}
-				requestIDToWaitingMap[reqID] = waitingMap
+				reqToWaitingMap[reqID] = waitingMap
 				for id2, node2 := range network.nodes {
 					waitingMap[id2] = struct{}{}
 					go func(node2 *Node) {
