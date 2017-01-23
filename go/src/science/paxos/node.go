@@ -157,7 +157,6 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				case write1NackType:
 					if waitingMap, ok := write1WaitingMap[msg.OpID]; ok {
 						if _, ok := waitingMap[msg.N]; ok {
-							network.stdoutLogger.Printf("foo %d", msg.N)
 							delete(waitingMap, msg.N)
 							msg2 := msgMap[msg.OpID]
 							// Retry write
