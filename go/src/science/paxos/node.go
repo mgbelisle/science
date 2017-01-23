@@ -76,10 +76,11 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				if state.Final && msg.Type != finalType {
 					go func() {
 						network.nodes[msg.Sender].channel <- encodeMessage(&message{
-							Type:  finalType,
-							OpID:  msg.OpID,
-							Key:   msg.Key,
-							Value: state.Value,
+							Type:   finalType,
+							Sender: id,
+							OpID:   msg.OpID,
+							Key:    msg.Key,
+							Value:  state.Value,
 						})
 					}()
 					continue
@@ -193,10 +194,11 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 								for _, node2 := range network.nodes {
 									go func(node2 *Node) {
 										node2.channel <- encodeMessage(&message{
-											Type:  finalType,
-											OpID:  msg.OpID,
-											Key:   msg.Key,
-											Value: msg.Value,
+											Type:   finalType,
+											Sender: id,
+											OpID:   msg.OpID,
+											Key:    msg.Key,
+											Value:  msg.Value,
 										})
 									}(node2)
 								}
