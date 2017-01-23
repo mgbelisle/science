@@ -24,10 +24,10 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Type   int    `json:"type"`   // Required
-	Sender string `json:"sender"` // Required
+	Type   int    `json:"type"`
+	Sender string `json:"sender"`
 	OpID   string `json:"opId"`
-	Key    uint64 `json:"key"` // Required
+	Key    uint64 `json:"key"`
 	Value  []byte `json:"value"`
 	N      uint64 `json:"n"`
 
