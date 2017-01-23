@@ -182,12 +182,22 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						// network.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Type:   write2ResponseType,
 								Sender: id,
 								OpID:   msg.OpID,
-								Type:   write2ResponseType,
 								N:      msg.N,
 								Key:    msg.Key,
 								Value:  msg.Value,
+							})
+						}()
+					} else {
+						go func() {
+							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Type:   write2NackType,
+								OpID:   msg.OpID,
+								Sender: id,
+								N:      msg.N,
+								Key:    msg.Key,
 							})
 						}()
 					}
