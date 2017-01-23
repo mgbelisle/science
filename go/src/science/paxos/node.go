@@ -27,13 +27,13 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	cleanChan := make(chan string)
 
 	go func() {
-		msgMap := map[string]*message{}                      // {opId: messageWithChannel}
-		othersAcceptedNMap := map[string]uint64{}            // {opId: n}
-		othersAcceptedValueMap := map[string][]byte{}        // {opId: value}
-		proposedValueMap := map[string][]byte{}              // {opId: value}
-		write1WaitingMap := map[string]map[string]struct{}{} // {opId: waiting}
-		write2WaitingMap := map[string]map[string]struct{}{} // {opId: waiting}
-		readWaitingMap := map[string]map[string]struct{}{}   // {opId: waiting}
+		msgMap := map[string]*message{}                                 // {opId: messageWithChannel}
+		othersAcceptedNMap := map[string]uint64{}                       // {opId: n}
+		othersAcceptedValueMap := map[string][]byte{}                   // {opId: value}
+		proposedValueMap := map[string][]byte{}                         // {opId: value}
+		write1WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: waiting}}
+		write2WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: waiting}}
+		readWaitingMap := map[string]map[string]struct{}{}              // {opId: waiting}
 		getState := func(key uint64) (*stateStruct, error) {
 			stateBytes, err := storage.Get(key)
 			if err != nil {
@@ -89,7 +89,6 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				case readRequestType:
 				case readNackType:
 				case write1RequestType:
-					resp := (*message)(nil)
 					if state.PromisedN < msg.N {
 						// Promise
 						state.PromisedN = msg.N
@@ -98,65 +97,70 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 							continue
 						}
 						// network.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
-						resp = &message{
-							Type:   write1ResponseType,
-							OpID:   msg.OpID,
-							Sender: id,
-							N:      state.AcceptedN,
-							Key:    msg.Key,
-							Value:  state.Value,
-						}
+						go func() {
+							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Type:   write1ResponseType,
+								OpID:   msg.OpID,
+								Sender: id,
+								N:      state.AcceptedN,
+								Key:    msg.Key,
+								Value:  state.Value,
+							})
+						}()
 					} else {
-						// Nack
-						resp = &message{
-							Type:   writeNackType,
-							OpID:   msg.OpID,
-							Sender: id,
-							Key:    msg.Key,
-						}
+						go func() {
+							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+								Type:   write1NackType,
+								OpID:   msg.OpID,
+								Sender: id,
+								Key:    msg.Key,
+							})
+						}()
 					}
-					go func() {
-						network.nodes[msg.Sender].channel <- encodeMessage(resp)
-					}()
 				case write1ResponseType:
-					if waitingMap, ok := write1WaitingMap[msg.OpID]; ok {
-						if othersAcceptedNMap[msg.OpID] < msg.N {
-							othersAcceptedNMap[msg.OpID] = msg.N
-							othersAcceptedValueMap[msg.OpID] = msg.Value
-						}
-						delete(waitingMap, msg.Sender)
-						if n, w := len(network.nodes), len(waitingMap); w < n-w {
-							// Majority have responded, cleanup and send phase 2
-							delete(waitingMap, msg.OpID)
-							value := proposedValueMap[msg.OpID]
-							if 0 < othersAcceptedNMap[msg.OpID] {
-								value = othersAcceptedValueMap[msg.OpID]
+					if waitingMap1, ok := write1WaitingMap[msg.OpID]; ok {
+						if waitingMap2, ok := waitingMap1[msg.N]; ok {
+							if othersAcceptedNMap[msg.OpID] < msg.N {
+								othersAcceptedNMap[msg.OpID] = msg.N
+								othersAcceptedValueMap[msg.OpID] = msg.Value
 							}
+							delete(waitingMap2, msg.Sender)
+							if n, w := len(network.nodes), len(waitingMap2); w < n-w {
+								// Majority have responded
+								delete(waitingMap1, msg.N) // No longer waiting on phase1
 
-							waitingMap2 := map[string]struct{}{}
-							for id2, node2 := range network.nodes {
-								waitingMap2[id2] = struct{}{}
-								go func(node2 *Node) {
-									node2.channel <- encodeMessage(&message{
-										Type:   write2RequestType,
-										OpID:   msg.OpID,
-										Sender: id,
-										N:      msg.N,
-										Key:    msg.Key,
-										Value:  value,
-									})
-								}(node2)
+								value := proposedValueMap[msg.OpID]
+								if 0 < othersAcceptedNMap[msg.OpID] {
+									value = othersAcceptedValueMap[msg.OpID]
+								}
+
+								waitingMap2 := map[string]struct{}{}
+								for id2, node2 := range network.nodes {
+									waitingMap2[id2] = struct{}{}
+									go func(node2 *Node) {
+										node2.channel <- encodeMessage(&message{
+											Type:   write2RequestType,
+											OpID:   msg.OpID,
+											Sender: id,
+											N:      msg.N,
+											Key:    msg.Key,
+											Value:  value,
+										})
+									}(node2)
+								}
 							}
 						}
 					}
 				case write1NackType:
-					if waitingMap, ok := write1WaitingMap[msg.OpID]; ok {
-						delete(write1WaitingMap, msg.OpID)
-						msg2 := msgMap[msg.OpID]
-						// Retry
-						go func() {
-							writeChan <- msg2
-						}()
+					if waitingMap, ok := write2WaitingMap[msg.OpID]; ok {
+						if _, ok := waitingMap[msg.N]; ok {
+							delete(waitingMap, msg.N)
+							msg2 := msgMap[msg.OpID]
+							// Retry write
+							go func() {
+								writeChan <- msg2
+							}()
+						}
 					}
 				case write2RequestType:
 					if state.PromisedN <= msg.N {
@@ -179,31 +183,36 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}()
 					}
 				case write2ResponseType:
-					if waitingMap, ok := write2WaitingMap[msg.OpID]; ok {
-						delete(waitingMap, msg.Sender)
-						if n, w := len(network.nodes), len(waitingMap); w < n-w {
-							// Majority have responded
-							delete(write2WaitingMap, msg.OpID)
+					if waitingMap1, ok := write2WaitingMap[msg.OpID]; ok {
+						if waitingMap2, ok := waitingMap1[msg.N]; ok {
+							delete(waitingMap2, msg.Sender)
+							if n, w := len(network.nodes), len(waitingMap2); w < n-w {
+								// Majority have responded
+								delete(waitingMap1, msg.N) // No longer waiting on phase2
 
-							for _, node2 := range network.nodes {
-								go func(node2 *Node) {
-									node2.channel <- encodeMessage(&message{
-										Type:  finalType,
-										Key:   msg.Key,
-										Value: msg.Value,
-									})
-								}(node2)
+								for _, node2 := range network.nodes {
+									go func(node2 *Node) {
+										node2.channel <- encodeMessage(&message{
+											Type:  finalType,
+											OpID:  msg.OpID,
+											Key:   msg.Key,
+											Value: msg.Value,
+										})
+									}(node2)
+								}
 							}
 						}
 					}
 				case write2NackType:
 					if waitingMap, ok := write2WaitingMap[msg.OpID]; ok {
-						delete(write2WaitingMap, msg.OpID)
-						msg2 := msgMap[msg.OpID]
-						// Retry
-						go func() {
-							writeChan <- msg2
-						}()
+						if _, ok := waitingMap[msg.N]; ok {
+							delete(waitingMap, msg.N)
+							msg2 := msgMap[msg.OpID]
+							// Retry write
+							go func() {
+								writeChan <- msg2
+							}()
+						}
 					}
 				case finalType:
 					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
@@ -260,10 +269,15 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 
 				proposedValueMap[msg.OpID] = msg.Value
 				msgMap[msg.OpID] = msg
-				waitingMap := map[string]struct{}{}
-				write1WaitingMap[msg.OpID] = waitingMap
+				waitingMap1, ok := write1WaitingMap[msg.OpID]
+				if !ok {
+					waitingMap1 = map[uint64]map[string]struct{}{}
+					write1WaitingMap[msg.OpID] = waitingMap1
+				}
+				waitingMap2 := map[string]struct{}{}
+				waitingMap1[state.N] = waitingMap2
 				for id2, node2 := range network.nodes {
-					waitingMap[id2] = struct{}{}
+					waitingMap2[id2] = struct{}{}
 					go func(node2 *Node) {
 						node2.channel <- encodeMessage(&message{
 							Sender: id,

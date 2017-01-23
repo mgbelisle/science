@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -54,7 +55,7 @@ func main() {
 		wg.Add(1)
 		go func(agent, proposal string) {
 			defer wg.Add(-1)
-			value, err := paxos.Write(nodes[agent], 0, []byte(proposal))
+			value, err := paxos.Write(context.Background(), nodes[agent], 0, []byte(proposal))
 			if err != nil {
 				log.Printf("%s error: %v", agent, err)
 				return
