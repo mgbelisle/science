@@ -100,12 +100,13 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						// network.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
-								Type:   write1ResponseType,
-								OpID:   msg.OpID,
-								Sender: id,
-								N:      state.AcceptedN,
-								Key:    msg.Key,
-								Value:  state.Value,
+								Type:      write1ResponseType,
+								OpID:      msg.OpID,
+								Sender:    id,
+								N:         msg.N,
+								AcceptedN: state.AcceptedN,
+								Key:       msg.Key,
+								Value:     state.Value,
 							})
 						}()
 					} else {
@@ -114,6 +115,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 								Type:   write1NackType,
 								OpID:   msg.OpID,
 								Sender: id,
+								N:      msg.N,
 								Key:    msg.Key,
 							})
 						}()
@@ -121,8 +123,8 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				case write1ResponseType:
 					if waitingMap1, ok := write1WaitingMap[msg.OpID]; ok {
 						if waitingMap2, ok := waitingMap1[msg.N]; ok {
-							if othersAcceptedNMap[msg.OpID] < msg.N {
-								othersAcceptedNMap[msg.OpID] = msg.N
+							if othersAcceptedNMap[msg.OpID] < msg.AcceptedN {
+								othersAcceptedNMap[msg.OpID] = msg.AcceptedN
 								othersAcceptedValueMap[msg.OpID] = msg.Value
 							}
 							delete(waitingMap2, msg.Sender)
@@ -155,6 +157,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				case write1NackType:
 					if waitingMap, ok := write1WaitingMap[msg.OpID]; ok {
 						if _, ok := waitingMap[msg.N]; ok {
+							network.stdoutLogger.Printf("foo %d", msg.N)
 							delete(waitingMap, msg.N)
 							msg2 := msgMap[msg.OpID]
 							// Retry write

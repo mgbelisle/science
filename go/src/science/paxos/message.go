@@ -24,12 +24,13 @@ func encodeMessage(msg *message) []byte {
 }
 
 type message struct {
-	Type   int    `json:"type"`
-	Sender string `json:"sender"`
-	OpID   string `json:"opId"`
-	Key    uint64 `json:"key"`
-	Value  []byte `json:"value"`
-	N      uint64 `json:"n"`
+	Type      int    `json:"type"`
+	Sender    string `json:"sender"`
+	OpID      string `json:"opId"`
+	Key       uint64 `json:"key"`
+	Value     []byte `json:"value"`
+	N         uint64 `json:"n"`
+	AcceptedN uint64 `json:"acceptedN"`
 
 	// For reading/writing
 	ResponseChan chan<- []byte `json:"-"`
