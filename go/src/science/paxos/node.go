@@ -24,7 +24,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	writeChan := make(chan *message)
 
 	go func() {
-		msgMap := map[string]*message{}                      // {id: messageWithChannel}
+		writeMsgMap := map[string]*message{}                 // {id: messageWithChannel}
 		othersAcceptedNMap := map[uint64]uint64{}            // {key: n}
 		othersAcceptedValueMap := map[uint64][]byte{}        // {key: value}
 		proposedValueMap := map[uint64][]byte{}              // {key: value}
@@ -181,19 +181,22 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}
 					}
 				case nackType:
-					// TODO
+					msgID := messageID(msg)
+					if msg2, ok := writeMsgMap[msgID]; ok {
+
+					}
 				case finalType:
 					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
 
 					msgID := messageID(msg)
-					if msg2, ok := msgMap[msgID]; ok {
+					if msg2, ok := writeMsgMap[msgID]; ok {
 						go func(msg2 *message) {
 							msg2.ResponseChan <- msg.Value
 							msg2.ErrChan <- nil
 						}(msg2)
 					}
 
-					delete(msgMap, msgID)
+					delete(writeMsgMap, msgID)
 					delete(othersAcceptedNMap, msg.Key)
 					delete(othersAcceptedValueMap, msg.Key)
 					delete(proposedValueMap, msg.Key)
@@ -210,6 +213,12 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					network.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}
 			case msg := <-readChan:
+				state, err := getState(msg.Key)
+				if err != nil {
+					msg.ResponseChan <- nil
+					msg.ErrChan <- err
+					continue
+				}
 				msg.ResponseChan <- nil
 				msg.ErrChan <- nil
 			case msg := <-writeChan:
@@ -228,7 +237,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 
 				msgID := messageID(msg)
 				proposedValueMap[msg.Key] = msg.Value
-				msgMap[msgID] = msg
+				writeMsgMap[msgID] = msg
 				waitingMap := map[string]struct{}{}
 				phase1WaitingMap[msgID] = waitingMap
 				for id2, node2 := range network.nodes {
