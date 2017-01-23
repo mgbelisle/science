@@ -280,8 +280,9 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					waitingMap2[id2] = struct{}{}
 					go func(node2 *Node) {
 						node2.channel <- encodeMessage(&message{
-							Sender: id,
 							Type:   write1RequestType,
+							Sender: id,
+							OpID:   msg.OpID,
 							N:      state.N,
 							Key:    msg.Key,
 						})
