@@ -153,7 +153,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}
 					}
 				case write1NackType:
-					if waitingMap, ok := write2WaitingMap[msg.OpID]; ok {
+					if waitingMap, ok := write1WaitingMap[msg.OpID]; ok {
 						if _, ok := waitingMap[msg.N]; ok {
 							delete(waitingMap, msg.N)
 							msg2 := msgMap[msg.OpID]
