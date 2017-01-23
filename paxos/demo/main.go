@@ -29,6 +29,9 @@ func main() {
 	}
 	flag.Parse()
 	network := paxos.NewNetwork()
+	if *verboseFlag {
+		paxos.SetLoggers(network, log.New(os.Stdout, "", log.LstdFlags), log.New(os.Stderr, "", log.LstdFlags))
+	}
 	nodes := map[string]*paxos.Node{}
 	wg := &sync.WaitGroup{}
 
@@ -44,10 +47,6 @@ func main() {
 	}
 	for agent := range agents {
 		node := paxos.NewNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
-		if *verboseFlag {
-			prefix := agent + " "
-			paxos.SetLoggers(node, log.New(os.Stdout, prefix, log.LstdFlags), log.New(os.Stderr, prefix, log.LstdFlags))
-		}
 		nodes[agent] = node
 		paxos.AddNode(network, node)
 	}

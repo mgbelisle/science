@@ -2,17 +2,13 @@ package paxos
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"log"
 )
 
 type Node struct {
-	id           string
-	channel      chan<- []byte
-	readChan     chan<- *message
-	writeChan    chan<- *message
-	stdoutLogger *log.Logger
-	stderrLogger *log.Logger
+	id        string
+	channel   chan<- []byte
+	readChan  chan<- *message
+	writeChan chan<- *message
 }
 
 func NewNode(id string, channel <-chan []byte, network *Network, storage *Storage) *Node {
@@ -26,21 +22,14 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	}()
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
-	node := &Node{
-		id:           id,
-		channel:      channel2,
-		readChan:     readChan,
-		writeChan:    writeChan,
-		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
-		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
-	}
 
 	go func() {
-		keyToMsgMap := map[uint64]map[*message]struct{}{} // {key: messages}
-		othersAcceptedNMap := map[uint64]uint64{}         // {key: n}
-		othersAcceptedValueMap := map[uint64][]byte{}     // {key: value}
-		proposedValueMap := map[uint64][]byte{}
-		reqToWaitingMap := map[string]map[string]struct{}{}
+		msgMap := map[string]*message{}                      // {id: messageWithChannel}
+		othersAcceptedNMap := map[uint64]uint64{}            // {key: n}
+		othersAcceptedValueMap := map[uint64][]byte{}        // {key: value}
+		proposedValueMap := map[uint64][]byte{}              // {key: value}
+		phase1WaitingMap := map[string]map[string]struct{}{} // {id: waiting}
+		phase2WaitingMap := map[string]map[string]struct{}{} // {id: waiting}
 		getState := func(key uint64) (*stateStruct, error) {
 			stateBytes, err := storage.Get(key)
 			if err != nil {
@@ -66,18 +55,18 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				if !ok {
 					return // Channel is closed
 				}
-				node.stdoutLogger.Printf("%s", msgBytes)
+				network.stdoutLogger.Printf("%s", msgBytes)
 
 				msg := &message{}
 				if err := json.Unmarshal(msgBytes, msg); err != nil {
-					node.stderrLogger.Print(err)
+					network.stderrLogger.Print(err)
 					continue
 				}
 
 				// Get the state
 				state, err := getState(msg.Key)
 				if err != nil {
-					node.stderrLogger.Print(err)
+					network.stderrLogger.Print(err)
 					continue
 				}
 				if state.Final && msg.Type != finalType {
@@ -93,26 +82,38 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 
 				switch msg.Type {
 				case phase1RequestType:
+					resp := (*message)(nil)
 					if state.PromisedN < msg.N {
+						// Promise
 						state.PromisedN = msg.N
 						if err := putState(msg.Key, state); err != nil {
-							node.stderrLogger.Print(err)
+							network.stderrLogger.Print(err)
 							continue
 						}
-						// node.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
-						go func() {
-							network.nodes[msg.Sender].channel <- encodeMessage(&message{
-								Sender:    id,
-								Type:      phase1ResponseType,
-								N:         state.AcceptedN,
-								RequestID: msg.RequestID,
-								Key:       msg.Key,
-								Value:     state.Value,
-							})
-						}()
+						// network.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
+						resp = &message{
+							Sender:    id,
+							Type:      phase1ResponseType,
+							N:         msg.N,
+							Key:       msg.Key,
+							Value:     state.Value,
+							AcceptedN: state.AcceptedN,
+						}
+					} else {
+						// Nack
+						resp = &message{
+							Sender: id,
+							Type:   nackType,
+							N:      msg.N,
+							Key:    msg.Key,
+						}
 					}
+					go func() {
+						network.nodes[msg.Sender].channel <- encodeMessage(resp)
+					}()
 				case phase1ResponseType:
-					if waitingMap, ok := reqToWaitingMap[msg.RequestID]; ok {
+					msgID := messageID(msg)
+					if waitingMap, ok := phase1WaitingMap[msgID]; ok {
 						if othersAcceptedNMap[msg.Key] < msg.N {
 							othersAcceptedNMap[msg.Key] = msg.N
 							othersAcceptedValueMap[msg.Key] = msg.Value
@@ -120,25 +121,22 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded, cleanup and send phase 2
-							delete(reqToWaitingMap, msg.RequestID)
+							delete(waitingMap, msgID)
 							value := proposedValueMap[msg.Key]
 							if 0 < othersAcceptedNMap[msg.Key] {
 								value = othersAcceptedValueMap[msg.Key]
 							}
 
-							reqID := requestID()
 							waitingMap2 := map[string]struct{}{}
-							reqToWaitingMap[reqID] = waitingMap2
 							for id2, node2 := range network.nodes {
 								waitingMap2[id2] = struct{}{}
 								go func(node2 *Node) {
 									node2.channel <- encodeMessage(&message{
-										Sender:    id,
-										RequestID: reqID,
-										Type:      phase2RequestType,
-										N:         state.N,
-										Key:       msg.Key,
-										Value:     value,
+										Sender: id,
+										Type:   phase2RequestType,
+										N:      msg.N,
+										Key:    msg.Key,
+										Value:  value,
 									})
 								}(node2)
 							}
@@ -149,26 +147,27 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						state.AcceptedN = msg.N
 						state.Value = msg.Value
 						if err := putState(msg.Key, state); err != nil {
-							node.stderrLogger.Print(err)
+							network.stderrLogger.Print(err)
 							continue
 						}
-						// node.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
+						// network.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
 						go func() {
 							network.nodes[msg.Sender].channel <- encodeMessage(&message{
-								Sender:    id,
-								Type:      phase2ResponseType,
-								RequestID: msg.RequestID,
-								Key:       msg.Key,
-								Value:     msg.Value,
+								Sender: id,
+								Type:   phase2ResponseType,
+								N:      msg.N,
+								Key:    msg.Key,
+								Value:  msg.Value,
 							})
 						}()
 					}
 				case phase2ResponseType:
-					if waitingMap, ok := reqToWaitingMap[msg.RequestID]; ok {
+					msgID := messageID(msg)
+					if waitingMap, ok := phase2WaitingMap[msgID]; ok {
 						delete(waitingMap, msg.Sender)
 						if n, w := len(network.nodes), len(waitingMap); w < n-w {
 							// Majority have responded
-							delete(reqToWaitingMap, msg.RequestID)
+							delete(phase2WaitingMap, msgID)
 
 							for _, node2 := range network.nodes {
 								go func(node2 *Node) {
@@ -181,28 +180,33 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 							}
 						}
 					}
+				case nackType:
+					// TODO
 				case finalType:
-					for msg2 := range keyToMsgMap[msg.Key] {
+					msgID := messageID(msg)
+					if msg2, ok := msgMap[msgID]; ok {
 						go func(msg2 *message) {
 							msg2.ResponseChan <- msg.Value
 							msg2.ErrChan <- nil
 						}(msg2)
 					}
-					// node.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
+					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
 
 					if err := putState(msg.Key, &stateStruct{
 						Value: msg.Value,
 						Final: true,
 					}); err != nil {
-						node.stderrLogger.Print(err)
+						network.stderrLogger.Print(err)
 					}
 
-					delete(keyToMsgMap, msg.Key)
+					delete(msgMap, msgID)
 					delete(othersAcceptedNMap, msg.Key)
 					delete(othersAcceptedValueMap, msg.Key)
 					delete(proposedValueMap, msg.Key)
+					delete(phase1WaitingMap, msgID)
+					delete(phase2WaitingMap, msgID)
 				default:
-					node.stderrLogger.Printf("Illegal message type: %d", msg.Type)
+					network.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}
 			case msg := <-readChan:
 				msg.ResponseChan <- nil
@@ -221,25 +225,19 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					continue
 				}
 
+				msgID := messageID(msg)
 				proposedValueMap[msg.Key] = msg.Value
-				messagesMap, ok := keyToMsgMap[msg.Key]
-				if !ok {
-					messagesMap = map[*message]struct{}{}
-					keyToMsgMap[msg.Key] = messagesMap
-				}
-				messagesMap[msg] = struct{}{}
-				reqID := requestID()
+				msgMap[msgID] = msg
 				waitingMap := map[string]struct{}{}
-				reqToWaitingMap[reqID] = waitingMap
+				phase1WaitingMap[msgID] = waitingMap
 				for id2, node2 := range network.nodes {
 					waitingMap[id2] = struct{}{}
 					go func(node2 *Node) {
 						node2.channel <- encodeMessage(&message{
-							Sender:    id,
-							RequestID: reqID,
-							Type:      phase1RequestType,
-							N:         state.N,
-							Key:       msg.Key,
+							Sender: id,
+							Type:   phase1RequestType,
+							N:      state.N,
+							Key:    msg.Key,
 						})
 					}(node2)
 				}
@@ -247,7 +245,12 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 		}
 	}()
 
-	return node
+	return &Node{
+		id:        id,
+		channel:   channel2,
+		readChan:  readChan,
+		writeChan: writeChan,
+	}
 }
 
 func Read(node *Node, key uint64) ([]byte, error) {
@@ -273,9 +276,4 @@ func Write(node *Node, key uint64, value []byte) ([]byte, error) {
 		}
 	}()
 	return <-respChan, <-errChan
-}
-
-func SetLoggers(node *Node, stdout, stderr *log.Logger) {
-	node.stdoutLogger = stdout
-	node.stderrLogger = stderr
 }

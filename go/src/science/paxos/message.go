@@ -1,7 +1,6 @@
 package paxos
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 )
@@ -12,6 +11,7 @@ const (
 	phase2RequestType
 	phase2ResponseType
 	finalType
+	nackType
 )
 
 func encodeMessage(msg *message) []byte {
@@ -21,10 +21,10 @@ func encodeMessage(msg *message) []byte {
 
 type message struct {
 	Sender    string `json:"sender"`
-	RequestID string `json:"requestId"`
 	Type      int    `json:"type"`
 	Key       uint64 `json:"key"`
 	N         uint64 `json:"n"`
+	AcceptedN uint64 `json:"acceptedN"`
 	Value     []byte `json:"value"`
 
 	// For reading/writing
@@ -32,8 +32,6 @@ type message struct {
 	ErrChan      chan<- error  `json:"-"`
 }
 
-func requestID() string {
-	b := make([]byte, 16)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
+func messageID(msg *message) string {
+	return fmt.Sprintf("%d:%d", msg.Key, msg.N)
 }
