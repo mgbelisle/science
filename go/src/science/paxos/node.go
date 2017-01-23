@@ -137,9 +137,15 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 									value = othersAcceptedValueMap[msg.OpID]
 								}
 
-								waitingMap2 := map[string]struct{}{}
+								waitingMap3, ok := write2WaitingMap[msg.OpID]
+								if !ok {
+									waitingMap3 = map[uint64]map[string]struct{}{}
+									write2WaitingMap[msg.OpID] = waitingMap3
+								}
+								waitingMap4 := map[string]struct{}{}
+								waitingMap3[msg.N] = waitingMap4
 								for id2, node2 := range network.nodes {
-									waitingMap2[id2] = struct{}{}
+									waitingMap4[id2] = struct{}{}
 									go func(node2 *Node) {
 										node2.channel <- encodeMessage(&message{
 											Type:   write2RequestType,
