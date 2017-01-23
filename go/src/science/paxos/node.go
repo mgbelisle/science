@@ -183,20 +183,14 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				case nackType:
 					// TODO
 				case finalType:
+					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
+
 					msgID := messageID(msg)
 					if msg2, ok := msgMap[msgID]; ok {
 						go func(msg2 *message) {
 							msg2.ResponseChan <- msg.Value
 							msg2.ErrChan <- nil
 						}(msg2)
-					}
-					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
-
-					if err := putState(msg.Key, &stateStruct{
-						Value: msg.Value,
-						Final: true,
-					}); err != nil {
-						network.stderrLogger.Print(err)
 					}
 
 					delete(msgMap, msgID)
@@ -205,6 +199,13 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					delete(proposedValueMap, msg.Key)
 					delete(phase1WaitingMap, msgID)
 					delete(phase2WaitingMap, msgID)
+
+					if err := putState(msg.Key, &stateStruct{
+						Value: msg.Value,
+						Final: true,
+					}); err != nil {
+						network.stderrLogger.Print(err)
+					}
 				default:
 					network.stderrLogger.Printf("Illegal message type: %d", msg.Type)
 				}
