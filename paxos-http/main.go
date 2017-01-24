@@ -1,9 +1,24 @@
 // http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf
 //
-// Strongly consistent key value store using the paxos algorithm, from scratch
+// Strongly consistent immutable key value store using the paxos algorithm, from scratch. Storage is
+// on disk. Runs several instances server side. As long as the majority are running, the store
+// functions.
 //
-// $ . ./gopath.sh
-// $ go run ./paxos-http/main.go --help
+//     $ . ./gopath.sh
+//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10000 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' &
+//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10001 --nodes '188.226.130.53:10000 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' &
+//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10002 --nodes '188.226.130.53:10001 188.226.130.53:10000 188.226.130.53:10003 188.226.130.53:10004' &
+//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10003 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10000 188.226.130.53:10004' &
+//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10004 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10000' &
+//
+// Client side
+//
+//     $ curl -X POST -d "People are crazy" 'http://188.226.130.53:10000/3'
+//     People are crazy
+//     $ curl 'http://188.226.130.53:10001/3'
+//     People are crazy
+//     $ curl -X POST -d "Beer is good" 'http://188.226.130.53:10002/3' // 3 has already been written
+//     People are crazy
 
 package main
 
