@@ -8,7 +8,7 @@ import (
 
 const (
 	readRequestType = iota
-	readNackType
+	readResponseType
 	write1RequestType
 	write1ResponseType
 	write1NackType

@@ -2,7 +2,9 @@ package paxos
 
 import (
 	"context"
+	"crypto/sha512"
 	"encoding/json"
+	"fmt"
 )
 
 type Node struct {
@@ -31,9 +33,11 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 		othersAcceptedNMap := map[string]uint64{}                       // {opId: n}
 		othersAcceptedValueMap := map[string][]byte{}                   // {opId: value}
 		proposedValueMap := map[string][]byte{}                         // {opId: value}
-		write1WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: waiting}}
-		write2WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: waiting}}
-		readWaitingMap := map[string]map[string]struct{}{}              // {opId: waiting}
+		write1WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: {sender: null}}}
+		write2WaitingMap := map[string]map[uint64]map[string]struct{}{} // {opId: {n: {sender: null}}}
+		readWaitingMap := map[string]map[string]struct{}{}              // {opId: {sender: null}}
+		readCountMap := map[string]map[string]int{}                     // {opId: {hash: count}}
+		readValueMap := map[string][]byte{}                             // {opId: value}
 		getState := func(key uint64) (*stateStruct, error) {
 			stateBytes, err := storage.Get(key)
 			if err != nil {
@@ -88,7 +92,47 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 
 				switch msg.Type {
 				case readRequestType:
-				case readNackType:
+					go func() {
+						network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							OpID:   msg.OpID,
+							Sender: id,
+							Type:   readResponseType,
+							Key:    msg.Key,
+							Value:  state.Value,
+							N:      state.N,
+						})
+					}()
+				case readResponseType:
+					if waitingMap, ok := readWaitingMap[msg.OpID]; ok {
+						if _, ok := waitingMap[msg.Sender]; ok {
+							delete(waitingMap, msg.Sender)
+
+							hash := getHash(msg.Value)
+							countMap := readCountMap[msg.OpID]
+							count := countMap[hash]
+							count++
+							countMap[hash] = count
+							if 1 < len(countMap) {
+								if countMap[getHash(readValueMap[msg.OpID])] < count {
+									readValueMap[msg.OpID] = msg.Value
+								}
+							}
+							if l := len(network.nodes); l-count < count {
+								// Majority have same value
+								for _, node2 := range network.nodes {
+									go func(node2 *Node) {
+										node2.channel <- encodeMessage(&message{
+											Type:   finalType,
+											Sender: id,
+											OpID:   msg.OpID,
+											Key:    msg.Key,
+											Value:  msg.Value,
+										})
+									}(node2)
+								}
+							}
+						}
+					}
 				case write1RequestType:
 					if state.PromisedN < msg.N {
 						// Promise
@@ -262,6 +306,8 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				msgMap[msg.OpID] = msg
 				waitingMap := map[string]struct{}{}
 				readWaitingMap[msg.OpID] = waitingMap
+				countMap := map[string]int{}
+				readCountMap[msg.OpID] = countMap
 				for id2, node2 := range network.nodes {
 					waitingMap[id2] = struct{}{}
 					go func(node2 *Node) {
@@ -316,6 +362,8 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				delete(write1WaitingMap, opID)
 				delete(write2WaitingMap, opID)
 				delete(readWaitingMap, opID)
+				delete(readCountMap, opID)
+				delete(readValueMap, opID)
 			}
 		}
 	}()
@@ -372,4 +420,8 @@ func Write(ctx context.Context, node *Node, key uint64, value []byte) ([]byte, e
 		}()
 		return nil, ctx.Err()
 	}
+}
+
+func getHash(value []byte) string {
+	return fmt.Sprintf("%x", sha512.Sum512(value))
 }
