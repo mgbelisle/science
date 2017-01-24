@@ -5,7 +5,7 @@
 // understand the paxos algorithm perfectly.
 //
 // $ . ./gopath.sh
-// $ go run ./paxos-demo/main.go --help
+// $ go run ./paxos-demo/main.go
 
 package main
 
