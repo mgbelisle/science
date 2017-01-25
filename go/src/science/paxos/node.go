@@ -28,6 +28,8 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	writeChan := make(chan *message)
 	cleanChan := make(chan string)
 
+	// Start a single goroutine for this node and communicate with it via channels to make it
+	// all thread safe
 	go func() {
 		msgMap := map[string]*message{}                                 // {opId: messageWithChannel}
 		othersAcceptedNMap := map[string]uint64{}                       // {opId: n}
@@ -77,6 +79,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					network.stderrLogger.Print(err)
 					continue
 				}
+				// If state is final, inform the sender
 				if state.Final && msg.Type != finalType {
 					go func() {
 						network.nodes[msg.Sender].channel <- encodeMessage(&message{
