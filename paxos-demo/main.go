@@ -44,10 +44,6 @@ func main() {
 	}
 	nodes := map[string]*paxos.Node{}
 	wg := &sync.WaitGroup{}
-
-	// Awesome scenario: Five spies must coordinate a meetup. If they show up at different spots
-	// then they die, and their communication channels are slow and unreliable. Thankfully, they
-	// all understand the paxos algorithm perfectly.
 	agents := map[string]string{
 		"Ethan Hunt":      "Tokyo",
 		"Jim Phelps":      "Vegas",
@@ -60,6 +56,8 @@ func main() {
 		nodes[agent] = node
 		paxos.AddNode(network, node)
 	}
+
+	// Each agent tries to write key 0 simultaneously
 	for agent, proposal := range agents {
 		wg.Add(1)
 		go func(agent, proposal string) {
