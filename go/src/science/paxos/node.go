@@ -15,7 +15,8 @@ type Node struct {
 	cleanChan chan<- string
 }
 
-func NewNode(id string, channel <-chan []byte, network *Network, storage *Storage) *Node {
+// Creates a local node on the network with storage
+func (network *Network) AddNode(id string, channel <-chan []byte, storage *Storage) *Node {
 	// Everything from channel goes into channel2
 	channel2 := make(chan []byte)
 	go func() {
@@ -27,6 +28,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
 	cleanChan := make(chan string)
+	network.channels[id] = channel2
 
 	// Start a single goroutine for this node and communicate with it via channels to make it
 	// all thread safe
@@ -82,7 +84,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				// If state is final, inform the sender
 				if state.Final && msg.Type != finalType {
 					go func() {
-						network.nodes[msg.Sender].channel <- encodeMessage(&message{
+						network.channels[msg.Sender] <- encodeMessage(&message{
 							Type:   finalType,
 							Sender: id,
 							OpID:   msg.OpID,
@@ -96,7 +98,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				switch msg.Type {
 				case readRequestType:
 					go func() {
-						network.nodes[msg.Sender].channel <- encodeMessage(&message{
+						network.channels[msg.Sender] <- encodeMessage(&message{
 							OpID:   msg.OpID,
 							Sender: id,
 							Type:   readResponseType,
@@ -119,7 +121,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 									others += count
 								}
 							}
-							if l := len(network.nodes); l-others <= others {
+							if l := len(network.channels); l-others <= others {
 								// Majority not possible
 								continue
 							}
@@ -128,7 +130,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 							if countMap[getHash(readValueMap[msg.OpID])] < countMap[hash] {
 								readValueMap[msg.OpID] = msg.Value
 							}
-							if l, c := len(network.nodes), countMap[hash]; l-c < c {
+							if l, c := len(network.channels), countMap[hash]; l-c < c {
 								if msg.Value == nil {
 									if msg2, ok := msgMap[msg.OpID]; ok {
 										delete(msgMap, msg.OpID)
@@ -142,16 +144,16 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 									}
 								} else {
 									// Majority have same value
-									for _, node2 := range network.nodes {
-										go func(node2 *Node) {
-											node2.channel <- encodeMessage(&message{
+									for _, channel2 := range network.channels {
+										go func(channel2 chan<- []byte) {
+											channel2 <- encodeMessage(&message{
 												Type:   finalType,
 												Sender: id,
 												OpID:   msg.OpID,
 												Key:    msg.Key,
 												Value:  msg.Value,
 											})
-										}(node2)
+										}(channel2)
 									}
 								}
 							}
@@ -167,7 +169,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}
 						// network.stdoutLogger.Printf("Promised N=%d to %s", msg.N, msg.Sender)
 						go func() {
-							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							network.channels[msg.Sender] <- encodeMessage(&message{
 								Type:      write1ResponseType,
 								OpID:      msg.OpID,
 								Sender:    id,
@@ -179,7 +181,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}()
 					} else {
 						go func() {
-							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							network.channels[msg.Sender] <- encodeMessage(&message{
 								Type:   write1NackType,
 								OpID:   msg.OpID,
 								Sender: id,
@@ -196,7 +198,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 								othersAcceptedValueMap[msg.OpID] = msg.Value
 							}
 							delete(waitingMap2, msg.Sender)
-							if n, w := len(network.nodes), len(waitingMap2); w < n-w {
+							if n, w := len(network.channels), len(waitingMap2); w < n-w {
 								// Majority have responded
 								delete(waitingMap1, msg.N) // No longer waiting on phase1
 
@@ -212,10 +214,10 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 								}
 								waitingMap4 := map[string]struct{}{}
 								waitingMap3[msg.N] = waitingMap4
-								for id2, node2 := range network.nodes {
+								for id2, channel2 := range network.channels {
 									waitingMap4[id2] = struct{}{}
-									go func(node2 *Node) {
-										node2.channel <- encodeMessage(&message{
+									go func(channel2 chan<- []byte) {
+										channel2 <- encodeMessage(&message{
 											Type:   write2RequestType,
 											OpID:   msg.OpID,
 											Sender: id,
@@ -223,7 +225,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 											Key:    msg.Key,
 											Value:  value,
 										})
-									}(node2)
+									}(channel2)
 								}
 							}
 						}
@@ -249,7 +251,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}
 						// network.stdoutLogger.Printf("Accepted Key=%d Value=%s Sender=%s N=%d", msg.Key, msg.Value, msg.Sender, msg.N)
 						go func() {
-							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							network.channels[msg.Sender] <- encodeMessage(&message{
 								Type:   write2ResponseType,
 								Sender: id,
 								OpID:   msg.OpID,
@@ -260,7 +262,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 						}()
 					} else {
 						go func() {
-							network.nodes[msg.Sender].channel <- encodeMessage(&message{
+							network.channels[msg.Sender] <- encodeMessage(&message{
 								Type:   write2NackType,
 								OpID:   msg.OpID,
 								Sender: id,
@@ -273,20 +275,20 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 					if waitingMap1, ok := write2WaitingMap[msg.OpID]; ok {
 						if waitingMap2, ok := waitingMap1[msg.N]; ok {
 							delete(waitingMap2, msg.Sender)
-							if n, w := len(network.nodes), len(waitingMap2); w < n-w {
+							if n, w := len(network.channels), len(waitingMap2); w < n-w {
 								// Majority have responded
 								delete(waitingMap1, msg.N) // No longer waiting on phase2
 
-								for _, node2 := range network.nodes {
-									go func(node2 *Node) {
-										node2.channel <- encodeMessage(&message{
+								for _, channel2 := range network.channels {
+									go func(channel2 chan<- []byte) {
+										channel2 <- encodeMessage(&message{
 											Type:   finalType,
 											Sender: id,
 											OpID:   msg.OpID,
 											Key:    msg.Key,
 											Value:  msg.Value,
 										})
-									}(node2)
+									}(channel2)
 								}
 							}
 						}
@@ -332,16 +334,16 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				readWaitingMap[msg.OpID] = waitingMap
 				countMap := map[string]int{}
 				readCountMap[msg.OpID] = countMap
-				for id2, node2 := range network.nodes {
+				for id2, channel2 := range network.channels {
 					waitingMap[id2] = struct{}{}
-					go func(node2 *Node) {
-						node2.channel <- encodeMessage(&message{
+					go func(channel2 chan<- []byte) {
+						channel2 <- encodeMessage(&message{
 							OpID:   msg.OpID,
 							Sender: id,
 							Type:   readRequestType,
 							Key:    msg.Key,
 						})
-					}(node2)
+					}(channel2)
 				}
 			case msg := <-writeChan:
 				state, err := getState(msg.Key)
@@ -366,17 +368,17 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 				}
 				waitingMap2 := map[string]struct{}{}
 				waitingMap1[state.N] = waitingMap2
-				for id2, node2 := range network.nodes {
+				for id2, channel2 := range network.channels {
 					waitingMap2[id2] = struct{}{}
-					go func(node2 *Node) {
-						node2.channel <- encodeMessage(&message{
+					go func(channel2 chan<- []byte) {
+						channel2 <- encodeMessage(&message{
 							Type:   write1RequestType,
 							Sender: id,
 							OpID:   msg.OpID,
 							N:      state.N,
 							Key:    msg.Key,
 						})
-					}(node2)
+					}(channel2)
 				}
 			case opID := <-cleanChan:
 				delete(msgMap, opID)
@@ -401,7 +403,7 @@ func NewNode(id string, channel <-chan []byte, network *Network, storage *Storag
 	}
 }
 
-func Read(ctx context.Context, key uint64, node *Node) ([]byte, error) {
+func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	respChan, errChan := make(chan []byte), make(chan error)
 	opID := newOpID()
 	go func() {
@@ -423,7 +425,7 @@ func Read(ctx context.Context, key uint64, node *Node) ([]byte, error) {
 	}
 }
 
-func Write(ctx context.Context, key uint64, value []byte, node *Node) ([]byte, error) {
+func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, error) {
 	if value == nil {
 		return nil, &ErrNilValue{}
 	}

@@ -7,30 +7,23 @@ import (
 
 func NewNetwork() *Network {
 	return &Network{
-		nodes:        map[string]*Node{},
+		channels:     map[string]chan<- []byte{},
 		stdoutLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 		stderrLogger: log.New(ioutil.Discard, "", log.LstdFlags),
 	}
 }
 
 type Network struct {
-	nodes        map[string]*Node
+	channels     map[string]chan<- []byte
 	stdoutLogger *log.Logger
 	stderrLogger *log.Logger
 }
 
-func AddNode(network *Network, node *Node) {
-	network.nodes[node.id] = node
+func (network *Network) AddRemoteNode(id string, channel chan<- []byte) {
+	network.channels[id] = channel
 }
 
-func AddRemoteNode(network *Network, id string, channel chan<- []byte) {
-	network.nodes[id] = &Node{
-		id:      id,
-		channel: channel,
-	}
-}
-
-func SetLoggers(network *Network, stdout, stderr *log.Logger) {
+func (network *Network) SetLoggers(stdout, stderr *log.Logger) {
 	network.stdoutLogger = stdout
 	network.stderrLogger = stderr
 }

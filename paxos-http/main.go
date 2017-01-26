@@ -70,10 +70,10 @@ func main() {
 	prefix := *addrFlag + " "
 	stdout := log.New(os.Stdout, prefix, log.LstdFlags)
 	stderr := log.New(os.Stderr, prefix, log.LstdFlags)
-	paxos.SetLoggers(network, stdout, stderr)
+	network.SetLoggers(stdout, stderr)
 	for _, node := range strings.Fields(*nodesFlag) {
 		channel := make(chan []byte)
-		paxos.AddRemoteNode(network, node, channel)
+		network.AddRemoteNode(node, channel)
 		go func(node string, channel <-chan []byte) {
 			for data := range channel {
 				// Some simple auth
@@ -102,8 +102,7 @@ func main() {
 		log.Fatal(err)
 	}
 	channel := make(chan []byte)
-	node := paxos.NewNode(*addrFlag, channel, network, paxos.DiskStorage(path.Join(cwd, *addrFlag)))
-	paxos.AddNode(network, node)
+	node := network.AddNode(*addrFlag, channel, paxos.DiskStorage(path.Join(cwd, *addrFlag)))
 
 	// Listen and serve
 	err = http.ListenAndServe(*addrFlag, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -144,7 +143,7 @@ func main() {
 		resp, err := []byte(nil), error(nil)
 		switch r.Method {
 		case "GET":
-			resp, err = paxos.Read(ctx, key, node)
+			resp, err = node.Read(ctx, key)
 			if err != nil {
 				stderr.Print(err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -161,7 +160,7 @@ func main() {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
-			resp, err = paxos.Write(ctx, key, value, node)
+			resp, err = node.Write(ctx, key, value)
 			if err != nil {
 				stderr.Print(err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)

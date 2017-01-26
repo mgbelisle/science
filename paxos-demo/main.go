@@ -40,7 +40,7 @@ func main() {
 	flag.Parse()
 	network := paxos.NewNetwork()
 	if *verboseFlag {
-		paxos.SetLoggers(network, log.New(os.Stdout, "", log.LstdFlags), log.New(os.Stderr, "", log.LstdFlags))
+		network.SetLoggers(log.New(os.Stdout, "", log.LstdFlags), log.New(os.Stderr, "", log.LstdFlags))
 	}
 	nodes := map[string]*paxos.Node{}
 	wg := &sync.WaitGroup{}
@@ -52,9 +52,8 @@ func main() {
 		"Franz Krieger":   "Berlin",
 	}
 	for agent := range agents {
-		node := paxos.NewNode(agent, make(<-chan []byte), network, paxos.MemoryStorage())
+		node := network.AddNode(agent, make(<-chan []byte), paxos.MemoryStorage())
 		nodes[agent] = node
-		paxos.AddNode(network, node)
 	}
 
 	// Each agent tries to write key 0 simultaneously
@@ -62,7 +61,7 @@ func main() {
 		wg.Add(1)
 		go func(agent, proposal string) {
 			defer wg.Add(-1)
-			value, err := paxos.Write(context.Background(), 0, []byte(proposal), nodes[agent])
+			value, err := nodes[agent].Write(context.Background(), 0, []byte(proposal))
 			if err != nil {
 				log.Printf("%s error: %v", agent, err)
 				return
