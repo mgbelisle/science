@@ -7,6 +7,10 @@ import (
 	"fmt"
 )
 
+// A node does read and write operations on the entire network
+//
+//     node.Read(ctx, key)
+//     node.Write(ctx, key, value)
 type Node struct {
 	id        string
 	channel   chan<- []byte
@@ -346,6 +350,7 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 					}(channel2)
 				}
 			case msg := <-writeChan:
+				// Start a round of Paxos for the given key
 				state, err := getState(msg.Key)
 				if err != nil {
 					msg.ResponseChan <- nil
@@ -381,6 +386,7 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 					}(channel2)
 				}
 			case opID := <-cleanChan:
+				// Cleanup after timeouts
 				delete(msgMap, opID)
 				delete(othersAcceptedNMap, opID)
 				delete(othersAcceptedValueMap, opID)
@@ -403,6 +409,8 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 	}
 }
 
+// Read a key. Returns nil when the value does not exist. Use context
+// if you want a timeout or cancelation.
 func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	respChan, errChan := make(chan []byte), make(chan error)
 	opID := newOpID()
@@ -425,6 +433,8 @@ func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	}
 }
 
+// Write a value. Returns the value that belongs to the key, which may be different than what you
+// tried to write if the key was already written.
 func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, error) {
 	if value == nil {
 		return nil, &ErrNilValue{}
