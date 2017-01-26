@@ -7,11 +7,14 @@ import (
 	"path"
 )
 
+// Storage is for persisting state, since nodes support failure. No need to implement your own
+// mutexes since nodes are already thread safe.
 type Storage struct {
 	Get func(key uint64) (value []byte, _ error)
 	Put func(key uint64, value []byte) error
 }
 
+// Durable storage on disk
 func DiskStorage(dir string) *Storage {
 	fname := func(key uint64) string {
 		return path.Join(dir, fmt.Sprintf("%d.json", key))
