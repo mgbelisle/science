@@ -409,8 +409,8 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 	}
 }
 
-// Read a key. Returns nil when the value does not exist. Use context
-// if you want a timeout or cancelation.
+// Read a key. Returns nil when the value does not exist. Use context if you want a timeout or
+// cancelation.
 func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	respChan, errChan := make(chan []byte), make(chan error)
 	opID := newOpID()
@@ -434,7 +434,7 @@ func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 }
 
 // Write a value. Returns the value that belongs to the key, which may be different than what you
-// tried to write if the key was already written.
+// tried to write if the key was already written. Use context if you want a timeout or cancelation.
 func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, error) {
 	if value == nil {
 		return nil, &ErrNilValue{}
