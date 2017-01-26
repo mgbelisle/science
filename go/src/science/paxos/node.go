@@ -21,18 +21,18 @@ type Node struct {
 
 // Creates a local node on the network with storage
 func (network *Network) AddNode(id string, channel <-chan []byte, storage *Storage) *Node {
-	// Everything from channel goes into channel2
-	channel2 := make(chan []byte)
+	// Everything from channel goes into msgChan
+	msgChan := make(chan []byte)
 	go func() {
 		for msgBytes := range channel {
-			channel2 <- msgBytes
+			msgChan <- msgBytes
 		}
-		close(channel2)
+		close(msgChan)
 	}()
 	readChan := make(chan *message)
 	writeChan := make(chan *message)
 	cleanChan := make(chan string)
-	network.channels[id] = channel2
+	network.channels[id] = msgChan
 
 	// Start a single goroutine for this node and communicate with it via channels to make it
 	// all thread safe
@@ -67,7 +67,7 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 
 		for {
 			select {
-			case msgBytes, ok := <-channel2:
+			case msgBytes, ok := <-msgChan:
 				if !ok {
 					return // Channel is closed
 				}
@@ -402,7 +402,7 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 
 	return &Node{
 		id:        id,
-		channel:   channel2,
+		channel:   msgChan,
 		readChan:  readChan,
 		writeChan: writeChan,
 		cleanChan: cleanChan,
