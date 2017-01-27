@@ -414,7 +414,7 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 // Read a key. Returns nil when the value does not exist. Use context if you want a timeout or
 // cancelation.
 func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
-	respChan, errChan := make(chan []byte), make(chan error)
+	respChan, errChan := make(chan []byte, 1), make(chan error, 1)
 	opID := newOpID()
 	go func() {
 		node.readChan <- &message{
@@ -428,7 +428,9 @@ func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	case resp := <-respChan:
 		return resp, <-errChan
 	case <-ctx.Done():
-		node.cleanChan <- opID
+		go func() {
+			node.cleanChan <- opID
+		}()
 		return nil, ctx.Err()
 	}
 }
@@ -439,7 +441,7 @@ func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, 
 	if value == nil {
 		return nil, &ErrNilValue{}
 	}
-	respChan, errChan := make(chan []byte), make(chan error)
+	respChan, errChan := make(chan []byte, 1), make(chan error, 1)
 	opID := newOpID()
 	go func() {
 		node.writeChan <- &message{
@@ -454,7 +456,9 @@ func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, 
 	case resp := <-respChan:
 		return resp, <-errChan
 	case <-ctx.Done():
-		node.cleanChan <- opID
+		go func() {
+			node.cleanChan <- opID
+		}()
 		return nil, ctx.Err()
 	}
 }
