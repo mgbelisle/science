@@ -117,24 +117,34 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 
 							hash := getHash(msg.Value)
 							countMap := readCountMap[msg.OpID]
-
-							// If a majority is not possible, finish
-							others := 0
-							for hash2, count := range countMap {
-								if hash2 != hash {
-									others += count
-								}
-							}
-							if l := len(network.channels); l-others <= others {
-								// Majority not possible
-								continue
-							}
-
 							countMap[hash]++
 							if countMap[getHash(readValueMap[msg.OpID])] < countMap[hash] {
 								readValueMap[msg.OpID] = msg.Value
+
+								// If a majority is not possible, finish
+								others := 0
+								for hash2, count := range countMap {
+									if hash2 != hash {
+										others += count
+									}
+								}
+								if l := len(network.channels); l-others <= others {
+									// Majority not possible
+									if msg2, ok := msgMap[msg.OpID]; ok {
+										delete(msgMap, msg.OpID)
+										go func() {
+											msg2.ResponseChan <- nil
+											msg2.ErrChan <- nil
+										}()
+										go func() {
+											cleanChan <- msg.OpID
+										}()
+									}
+									continue
+								}
 							}
 							if l, c := len(network.channels), countMap[hash]; l-c < c {
+								// Majority are nil
 								if msg.Value == nil {
 									if msg2, ok := msgMap[msg.OpID]; ok {
 										delete(msgMap, msg.OpID)
@@ -146,19 +156,19 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 											cleanChan <- msg.OpID
 										}()
 									}
-								} else {
-									// Majority have same value
-									for _, channel2 := range network.channels {
-										go func(channel2 chan<- []byte) {
-											channel2 <- encodeMessage(&message{
-												Type:   finalType,
-												Sender: id,
-												OpID:   msg.OpID,
-												Key:    msg.Key,
-												Value:  msg.Value,
-											})
-										}(channel2)
-									}
+									continue
+								}
+								// Majority have same value
+								for _, channel2 := range network.channels {
+									go func(channel2 chan<- []byte) {
+										channel2 <- encodeMessage(&message{
+											Type:   finalType,
+											Sender: id,
+											OpID:   msg.OpID,
+											Key:    msg.Key,
+											Value:  msg.Value,
+										})
+									}(channel2)
 								}
 							}
 						}
