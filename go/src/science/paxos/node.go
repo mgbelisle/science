@@ -428,9 +428,7 @@ func (node *Node) Read(ctx context.Context, key uint64) ([]byte, error) {
 	case resp := <-respChan:
 		return resp, <-errChan
 	case <-ctx.Done():
-		go func() {
-			node.cleanChan <- opID
-		}()
+		node.cleanChan <- opID
 		return nil, ctx.Err()
 	}
 }
@@ -456,9 +454,7 @@ func (node *Node) Write(ctx context.Context, key uint64, value []byte) ([]byte, 
 	case resp := <-respChan:
 		return resp, <-errChan
 	case <-ctx.Done():
-		go func() {
-			node.cleanChan <- opID
-		}()
+		node.cleanChan <- opID
 		return nil, ctx.Err()
 	}
 }
