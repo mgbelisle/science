@@ -312,18 +312,20 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 					// network.stdoutLogger.Printf("Final Key=%d Value=%s", msg.Key, msg.Value)
 
 					if msg2, ok := msgMap[msg.OpID]; ok {
+						if !state.Final {
+							if err := putState(msg.Key, &stateStruct{
+								Value: msg.Value,
+								Final: true,
+							}); err != nil {
+								network.stderrLogger.Print(err)
+								continue
+							}
+						}
+
 						go func(msg2 *message) {
 							msg2.ResponseChan <- msg.Value
 							msg2.ErrChan <- nil
 						}(msg2)
-
-						if err := putState(msg.Key, &stateStruct{
-							Value: msg.Value,
-							Final: true,
-						}); err != nil {
-							network.stderrLogger.Print(err)
-							continue
-						}
 
 						go func() {
 							cleanChan <- msg.OpID
