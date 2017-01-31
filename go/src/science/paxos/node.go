@@ -12,8 +12,6 @@ import (
 //     node.Read(ctx, key)
 //     node.Write(ctx, key, value)
 type Node struct {
-	id        string
-	channel   chan<- []byte
 	readChan  chan<- *message
 	writeChan chan<- *message
 	cleanChan chan<- string
@@ -413,8 +411,6 @@ func (network *Network) AddNode(id string, channel <-chan []byte, storage *Stora
 	}()
 
 	return &Node{
-		id:        id,
-		channel:   msgChan,
 		readChan:  readChan,
 		writeChan: writeChan,
 		cleanChan: cleanChan,
