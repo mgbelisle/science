@@ -54,9 +54,10 @@ OPTIONS:
 `
 
 var (
-	addrFlag  = flag.String("addr", "localhost:10000", "Address to listen and serve")
-	nodesFlag = flag.String("nodes", "localhost:10001 localhost:10002", "Remote nodes")
-	keyFlag   = flag.String("key", "", "Path to RSA private key")
+	addrFlag    = flag.String("addr", "localhost:10000", "Address to listen and serve")
+	nodesFlag   = flag.String("nodes", "localhost:10001 localhost:10002", "Remote nodes")
+	keyFlag     = flag.String("key", "", "Path to RSA private key")
+	profileFlag = flag.Bool("profile", false, "Profile memory and GC")
 )
 
 func main() {
@@ -137,16 +138,18 @@ func main() {
 	channel := make(chan []byte)
 	node := network.AddNode(*addrFlag, channel, paxos.DiskStorage(path.Join(cwd, *addrFlag)))
 
-	go func() {
-		for _ = range time.Tick(1000 * time.Millisecond) {
-			memStats := runtime.MemStats{}
-			runtime.ReadMemStats(&memStats)
-			fmt.Printf("Routines: %d\n", runtime.NumGoroutine())
-			fmt.Printf("Objects: %d\n", memStats.HeapObjects)
-			fmt.Printf("Memory: %d\n", memStats.Alloc)
-			fmt.Printf("NextGC: %d\n", memStats.NextGC)
-		}
-	}()
+	if *profileFlag {
+		go func() {
+			for _ = range time.Tick(1000 * time.Millisecond) {
+				memStats := runtime.MemStats{}
+				runtime.ReadMemStats(&memStats)
+				fmt.Printf("Routines: %d\n", runtime.NumGoroutine())
+				fmt.Printf("Objects: %d\n", memStats.HeapObjects)
+				fmt.Printf("Memory: %d\n", memStats.Alloc)
+				fmt.Printf("NextGC: %d\n", memStats.NextGC)
+			}
+		}()
+	}
 
 	// Listen and serve
 	err = http.ListenAndServe(*addrFlag, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
