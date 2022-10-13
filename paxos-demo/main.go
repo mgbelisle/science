@@ -1,10 +1,9 @@
 // http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf
 //
-// Awesome scenario: Five spies must coordinate a meetup. If they show up at different spots then
+// Scenario: Five IMF spies must coordinate a meetup. If they show up at different spots then
 // they die, and their communication channels are slow and unreliable. Thankfully, they all
 // understand the paxos algorithm perfectly.
 //
-// $ . ./gopath.sh
 // $ go run ./paxos-demo/main.go
 
 package main
@@ -17,7 +16,7 @@ import (
 	"os"
 	"sync"
 
-	"science/paxos"
+	"github.com/mgbelisle/science/paxos"
 )
 
 const usagePrefix = `Runs the paxos toy problem
