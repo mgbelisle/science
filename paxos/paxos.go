@@ -1,3 +1,2 @@
+// https://www.microsoft.com/en-us/research/uploads/prod/2016/12/paxos-simple-Copy.pdf
 package paxos
-
-// http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf

@@ -1,4 +1,4 @@
-// http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf
+// https://www.microsoft.com/en-us/research/uploads/prod/2016/12/paxos-simple-Copy.pdf
 //
 // Scenario: Five IMF spies must coordinate a meetup. If they show up at different spots then
 // they die, and their communication channels are slow and unreliable. Thankfully, they all
