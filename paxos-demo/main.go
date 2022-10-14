@@ -1,10 +1,15 @@
 // https://www.microsoft.com/en-us/research/uploads/prod/2016/12/paxos-simple-Copy.pdf
 //
-// Scenario: Five IMF spies must coordinate a meetup. If they show up at different spots then
+// Scenario: Five IMF agents must coordinate a meetup. If they show up at different spots then
 // they die, and their communication channels are slow and unreliable. Thankfully, they all
 // understand the paxos algorithm perfectly.
 //
 // $ go run main.go
+// Jack Harmon: Tokyo
+// Jim Phelps: Tokyo
+// Luther Stickell: Tokyo
+// Franz Krieger: Tokyo
+// Ethan Hunt: Tokyo
 
 package main
 
