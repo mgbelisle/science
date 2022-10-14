@@ -4,7 +4,7 @@
 // they die, and their communication channels are slow and unreliable. Thankfully, they all
 // understand the paxos algorithm perfectly.
 //
-// $ go run ./paxos-demo/main.go
+// $ go run main.go
 
 package main
 
