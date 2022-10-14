@@ -1,15 +1,12 @@
-// http://research.microsoft.com/en-us/um/people/lamport/pubs/paxos-simple.pdf
+// Strong consistency immutable key value store using the paxos algorithm, all
+// from scratch. Storage is on disk. Runs several instances server side. As long
+// as the majority are running, the store functions.
 //
-// Strongly consistent immutable key value store using the paxos algorithm, all from
-// scratch. Storage is on disk. Runs several instances server side. As long as the majority are
-// running, the store functions.
-//
-//     $ . ./gopath.sh
-//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10000 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
-//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10001 --nodes '188.226.130.53:10000 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
-//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10002 --nodes '188.226.130.53:10001 188.226.130.53:10000 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
-//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10003 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10000 188.226.130.53:10004' --key rsa-private-key.pem &
-//     $ go run ./paxos-http/main.go --addr 188.226.130.53:10004 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10000' --key rsa-private-key.pem &
+//     $ go run main.go --addr 188.226.130.53:10000 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
+//     $ go run main.go --addr 188.226.130.53:10001 --nodes '188.226.130.53:10000 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
+//     $ go run main.go --addr 188.226.130.53:10002 --nodes '188.226.130.53:10001 188.226.130.53:10000 188.226.130.53:10003 188.226.130.53:10004' --key rsa-private-key.pem &
+//     $ go run main.go --addr 188.226.130.53:10003 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10000 188.226.130.53:10004' --key rsa-private-key.pem &
+//     $ go run main.go --addr 188.226.130.53:10004 --nodes '188.226.130.53:10001 188.226.130.53:10002 188.226.130.53:10003 188.226.130.53:10000' --key rsa-private-key.pem &
 //
 // Client side
 //
