@@ -39,18 +39,18 @@ private fun englishDiff(byteArray: ByteArray): Double {
 }
 
 fun main() {
-    val ciphertext =
-            hexToBytes("1b37373331363f78151b7f2b783431333d78397828372d363c78373e783a393b3736")
     var plaintext = ByteArray(0)
     var diff = Double.MAX_VALUE
-    for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
-        val plaintext2 = xor(ciphertext, key.toByte())
-        val diff2 = englishDiff(plaintext2)
-        if (diff2 < diff) {
-            diff = diff2
-            plaintext = plaintext2
+    for (line in FileInputStream("cryptopals/1/4/4.txt").bufferedReader().lineSequence()) {
+        val ciphertext = hexToBytes(line)
+        for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
+            val plaintext2 = xor(ciphertext, key.toByte())
+            val diff2 = englishDiff(plaintext2)
+            if (diff2 < diff) {
+                diff = diff2
+                plaintext = plaintext2
+            }
         }
-        println(diff)
     }
     System.out.write(plaintext)
 }
