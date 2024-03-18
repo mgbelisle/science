@@ -1,3 +1,5 @@
+import java.io.FileReader
+import java.util.Base64
 import kotlin.ByteArray
 
 // Hamming distance between two bytearrays
@@ -18,4 +20,14 @@ fun main() {
     if (hammingDistance("this is a test".toByteArray(), "wokka wokka!!!".toByteArray()) != 37) {
         throw AssertionError("hammingDistance failed")
     }
+    // Read 6.txt and base64 decode it
+    val ciphertext =
+            FileReader("cryptopals/1/6/6.txt")
+                    .useLines { it.map { Base64.getDecoder().decode(it) } }
+                    .flatMap { it.asIterable() }
+                    .toList()
+                    .toByteArray()
+    println(ciphertext)
+    // Iterate from 2 to 40
+    for (keySize in 2..40) {}
 }
