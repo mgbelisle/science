@@ -22,11 +22,13 @@ fun main() {
     }
     // Read 6.txt and base64 decode it
     val ciphertext =
-            FileReader("cryptopals/1/6/6.txt")
-                    .useLines { it.map { Base64.getDecoder().decode(it) } }
-                    .flatMap { it.asIterable() }
-                    .toList()
-                    .toByteArray()
+            FileReader("cryptopals/1/6/6.txt").useLines {
+                it
+                        .map { Base64.getDecoder().decode(it) }
+                        .flatMap { it.asIterable() }
+                        .toList()
+                        .toByteArray()
+            }
     println(ciphertext)
     // Iterate from 2 to 40
     for (keySize in 2..40) {}
