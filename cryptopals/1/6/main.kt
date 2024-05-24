@@ -26,11 +26,9 @@ fun main() {
             FileReader("1/6/6.txt").useLines {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
-    // Iterate from 2 to 40
-    val keySizeToNormalizedHammingDistance = mutableMapOf<Int, Double>()
-    for (keySize in 2..40) {
-        val normalizedHammingDistance = hammingDistance(ciphertext.sliceArray(0 until keySize),
+
+    val keySizeToNormalizedHammingDistance = mapOf(*(2..40).map { keySize ->
+        keySize to hammingDistance(ciphertext.sliceArray(0 until keySize),
                 ciphertext.sliceArray(keySize until keySize * 2)) / keySize.toDouble()
-        keySizeToNormalizedHammingDistance[keySize] = normalizedHammingDistance
-    }
+    }.toTypedArray())
 }
