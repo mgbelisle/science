@@ -3,6 +3,7 @@
 https://www.cryptopals.com
 
 ```sh
-kotlinc cryptopals/1/1/main.kt -include-runtime -d cryptopals/1/1/main.jar
-java -jar cryptopals/1/1/main.jar
+CHALLENGE=1/1
+kotlinc cryptopals/$CHALLENGE/main.kt -include-runtime -d cryptopals/$CHALLENGE/main.jar
+java -jar cryptopals/$CHALLENGE/main.jar
 ```
