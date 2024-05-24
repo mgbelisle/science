@@ -41,7 +41,7 @@ private fun englishDiff(byteArray: ByteArray): Double {
 fun main() {
     var plaintext = ByteArray(0)
     var diff = Double.MAX_VALUE
-    for (line in FileInputStream("cryptopals/1/4/4.txt").bufferedReader().lineSequence()) {
+    for (line in FileInputStream("1/4/4.txt").bufferedReader().lineSequence()) {
         val ciphertext = hexToBytes(line)
         for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
             val plaintext2 = xor(ciphertext, key.toByte())

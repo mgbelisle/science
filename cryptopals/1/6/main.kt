@@ -23,7 +23,7 @@ fun main() {
 
     // Read 6.txt and base64 decode each line
     val ciphertext =
-            FileReader("cryptopals/1/6/6.txt").useLines {
+            FileReader("1/6/6.txt").useLines {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
     println(ciphertext.size)

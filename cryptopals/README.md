@@ -4,6 +4,6 @@ https://www.cryptopals.com
 
 ```sh
 CHALLENGE=1/1
-kotlinc cryptopals/$CHALLENGE/main.kt -include-runtime -d cryptopals/$CHALLENGE/main.jar
-java -jar cryptopals/$CHALLENGE/main.jar
+kotlinc $CHALLENGE/main.kt -include-runtime -d $CHALLENGE/main.jar
+java -jar $CHALLENGE/main.jar
 ```
