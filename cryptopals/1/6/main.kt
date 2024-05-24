@@ -21,7 +21,7 @@ fun main() {
         throw AssertionError("hammingDistance failed")
     }
 
-    // Read 6.txt and base64 decode it
+    // Read 6.txt and base64 decode each line
     val ciphertext =
             FileReader("cryptopals/1/6/6.txt").useLines {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
