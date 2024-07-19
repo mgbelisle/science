@@ -93,7 +93,7 @@ fun main() {
                     }
                     .sortedBy { it.second }) {
         val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
-        val transposed = (1..keySize).map { i -> blocks.map { it[i] }.toByteArray() }
+        val transposed = (1..keySize).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
         val key = transposed.map { bestKey(it) }.toByteArray()
         val plaintext = repeatXor(ciphertext, key)
         println(String.format("%d %s", keySize, String(plaintext)))
