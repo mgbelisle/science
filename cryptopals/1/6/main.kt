@@ -39,4 +39,5 @@ fun main() {
                             }
                             .toTypedArray()
             )
+    print(keySizeToNormalizedHammingDistance)
 }
