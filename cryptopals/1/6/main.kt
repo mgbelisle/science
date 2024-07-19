@@ -27,17 +27,27 @@ fun main() {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
 
-    val keySizeToNormalizedHammingDistance =
-            mapOf(
-                    *(2..40)
-                            .map { keySize ->
-                                keySize to
-                                        hammingDistance(
-                                                ciphertext.sliceArray(0 until keySize),
-                                                ciphertext.sliceArray(keySize until keySize * 2)
-                                        ) / keySize.toDouble()
-                            }
-                            .toTypedArray()
-            )
-    print(keySizeToNormalizedHammingDistance)
+    (2..40).asSequence()
+            .map { keySize ->
+                keySize to
+                        hammingDistance(
+                                ciphertext.sliceArray(0 until keySize),
+                                ciphertext.sliceArray(keySize until keySize * 2)
+                        ) / keySize.toDouble()
+            }
+            .sortedBy { it.second }
+            .forEach { print(it.first) }
+    // val keySizeToNormalizedHammingDistance =
+    //         mapOf(
+    //                 *(2..40)
+    //                         .map { keySize ->
+    //                             keySize to
+    //                                     hammingDistance(
+    //                                             ciphertext.sliceArray(0 until keySize),
+    //                                             ciphertext.sliceArray(keySize until keySize * 2)
+    //                                     ) / keySize.toDouble()
+    //                         }
+    //                         .toTypedArray()
+    //         )
+    // print(keySizeToNormalizedHammingDistance)
 }
