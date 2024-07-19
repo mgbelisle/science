@@ -16,10 +16,6 @@ private fun hammingDistance(a: ByteArray, b: ByteArray): Int {
     return d
 }
 
-private fun hexToBytes(hexString: String): ByteArray {
-    return hexString.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-}
-
 private fun xor(a: ByteArray, b: Byte): ByteArray {
     val c = ByteArray(a.size)
     a.forEachIndexed { i, a2 -> c[i] = (a2.toInt() xor b.toInt()).toByte() }
@@ -53,18 +49,15 @@ private fun englishDiff(byteArray: ByteArray): Double {
             .sum()
 }
 
-private fun singleKeyXor(byteArray: ByteArray): ByteArray {
+private fun breakSingleKeyXor(ciphertext: ByteArray): ByteArray {
     var plaintext = ByteArray(0)
     var diff = Double.MAX_VALUE
-    for (line in FileInputStream("1/4/4.txt").bufferedReader().lineSequence()) {
-        val ciphertext = hexToBytes(line)
-        for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
-            val plaintext2 = xor(ciphertext, key.toByte())
-            val diff2 = englishDiff(plaintext2)
-            if (diff2 < diff) {
-                diff = diff2
-                plaintext = plaintext2
-            }
+    for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
+        val plaintext2 = xor(ciphertext, key.toByte())
+        val diff2 = englishDiff(plaintext2)
+        if (diff2 < diff) {
+            diff = diff2
+            plaintext = plaintext2
         }
     }
     return plaintext
@@ -84,15 +77,17 @@ fun main() {
 
     for ((keySize, _) in
             (2..40).asSequence()
-                    .map { keySize ->
-                        keySize to
+                    .map {
+                        // Key size guess
+                        it to
                                 hammingDistance(
-                                        ciphertext.sliceArray(0 until keySize),
-                                        ciphertext.sliceArray(keySize until keySize * 2)
-                                ) / keySize.toDouble()
+                                        ciphertext.sliceArray(0 until it),
+                                        ciphertext.sliceArray(it until it * 2)
+                                ) / it.toDouble()
                     }
                     .sortedBy { it.second }) {
         val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
         val transposed = (1..keySize).map { i -> blocks.map { it[i] }.toByteArray() }
+        val solved = transposed.map { it to englishDiff(breakSingleKeyXor(it)) }.sortedBy { it.second }
     }
 }
