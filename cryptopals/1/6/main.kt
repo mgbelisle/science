@@ -2,6 +2,7 @@ import java.io.FileInputStream
 import java.io.FileReader
 import java.util.Base64
 import kotlin.ByteArray
+import kotlin.system.exitProcess
 
 // Hamming distance between two bytearrays
 private fun hammingDistance(a: ByteArray, b: ByteArray): Int {
@@ -93,30 +94,10 @@ fun main() {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
 
-    val keySize = (2..40).asSequence().minByOrNull { keySizeHammingDistance(ciphertext, it) }
-    println(keySize)
-    // for ((keySize, normDist) in
-    //         (2..40).asSequence()
-    //                 .map {
-    //                     // Key size guess
-    //                     it to
-    //                             hammingDistance(
-    //                                     ciphertext.sliceArray(0 until it),
-    //                                     ciphertext.sliceArray(it until it * 2)
-    //                             ) / it.toDouble()
-    //                 }
-    //                 .sortedBy { it.second }) {
-    //     println(String.format("%d: %s", keySize, normDist))
-    //     // val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
-    //     // val transposed =
-    //     //         (1..keySize).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
-    //     // val key = transposed.map { bestKey(it) }.toByteArray()
-    //     // val plaintext = repeatXor(ciphertext, key)
-    //     // if (keySize == 5 || keySize == 3 || keySize == 2 || keySize == 13) {
-    //     //     continue
-    //     // }
-    //     // println(String.format("%d %s", keySize, String(plaintext)))
-    //     // println(keySize)
-    //     // exitProcess(0)
-    // }
+    val keySize = (2..40).asSequence().minByOrNull { keySizeHammingDistance(ciphertext, it) }!!
+    val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
+    val transposed = (1..keySize).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
+
+    val key = transposed.map { bestKey(it) }.toByteArray()
+    System.out.write(repeatXor(ciphertext, key))
 }
