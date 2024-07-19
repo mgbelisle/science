@@ -37,6 +37,7 @@ fun main() {
                                 ) / keySize.toDouble()
                     }
                     .sortedBy { it.second }) {
-        println(String.format("%d: %f", keySize, dist))
+        // break the ciphertext into blocks of KEYSIZE length
+        val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
     }
 }
