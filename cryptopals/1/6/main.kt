@@ -27,7 +27,7 @@ fun main() {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
 
-    for ((keySize, _) in
+    for ((keySize, dist) in
             (2..40).asSequence()
                     .map { keySize ->
                         keySize to
@@ -37,6 +37,6 @@ fun main() {
                                 ) / keySize.toDouble()
                     }
                     .sortedBy { it.second }) {
-        println(keySize)
+        println(String.format("%d: %f", keySize, dist))
     }
 }
