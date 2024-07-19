@@ -69,6 +69,18 @@ private fun repeatXor(a: ByteArray, key: ByteArray): ByteArray {
     return c
 }
 
+private fun keySizeHammingDistance(ciphertext: ByteArray, keySize: Int): Double {
+    val pairs = ciphertext.asList().chunked(keySize).map { it.toByteArray() }.zipWithNext()
+    return pairs.sumOf {
+        val minLength = minOf(it.first.size, it.second.size)
+        hammingDistance(
+                        it.first.copyOfRange(0, minLength),
+                        it.second.copyOfRange(0, minLength),
+                )
+                .toDouble() / keySize
+    } / pairs.size
+}
+
 fun main() {
     // Assert that the hamming distance between two strings is as expected
     if (hammingDistance("this is a test".toByteArray(), "wokka wokka!!!".toByteArray()) != 37) {
@@ -81,21 +93,30 @@ fun main() {
                 it.flatMap { Base64.getDecoder().decode(it).asIterable() }.toList().toByteArray()
             }
 
-    for ((keySize, _) in
-            (2..40).asSequence()
-                    .map {
-                        // Key size guess
-                        it to
-                                hammingDistance(
-                                        ciphertext.sliceArray(0 until it),
-                                        ciphertext.sliceArray(it until it * 2)
-                                ) / it.toDouble()
-                    }
-                    .sortedBy { it.second }) {
-        val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
-        val transposed = (1..keySize).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
-        val key = transposed.map { bestKey(it) }.toByteArray()
-        val plaintext = repeatXor(ciphertext, key)
-        println(String.format("%d %s", keySize, String(plaintext)))
-    }
+    val keySize = (2..40).asSequence().minByOrNull { keySizeHammingDistance(ciphertext, it) }
+    println(keySize)
+    // for ((keySize, normDist) in
+    //         (2..40).asSequence()
+    //                 .map {
+    //                     // Key size guess
+    //                     it to
+    //                             hammingDistance(
+    //                                     ciphertext.sliceArray(0 until it),
+    //                                     ciphertext.sliceArray(it until it * 2)
+    //                             ) / it.toDouble()
+    //                 }
+    //                 .sortedBy { it.second }) {
+    //     println(String.format("%d: %s", keySize, normDist))
+    //     // val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
+    //     // val transposed =
+    //     //         (1..keySize).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
+    //     // val key = transposed.map { bestKey(it) }.toByteArray()
+    //     // val plaintext = repeatXor(ciphertext, key)
+    //     // if (keySize == 5 || keySize == 3 || keySize == 2 || keySize == 13) {
+    //     //     continue
+    //     // }
+    //     // println(String.format("%d %s", keySize, String(plaintext)))
+    //     // println(keySize)
+    //     // exitProcess(0)
+    // }
 }
