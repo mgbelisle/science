@@ -23,6 +23,12 @@ private fun xor(a: ByteArray, b: Byte): ByteArray {
     return c
 }
 
+private fun repeatXor(a: ByteArray, key: ByteArray): ByteArray {
+    val c = ByteArray(a.size)
+    a.forEachIndexed { i, a2 -> c[i] = (a2.toInt() xor key[i % key.size].toInt()).toByte() }
+    return c
+}
+
 // Given a bytearray, return a map {byte: count}
 private fun byteArrayToCharCountMap(byteArray: ByteArray): Map<Byte, Int> {
     return byteArray
@@ -64,14 +70,6 @@ private fun bestKey(block: ByteArray): Byte {
     return key
 }
 
-private fun repeatXor(a: ByteArray, key: ByteArray): ByteArray {
-    val c = ByteArray(a.size)
-    for ((i, a2) in a.withIndex()) {
-        c[i] = (a2.toInt() xor key[i % key.size].toInt()).toByte()
-    }
-    return c
-}
-
 private fun keySizeHammingDistance(ciphertext: ByteArray, keySize: Int): Double {
     val pairs = ciphertext.asList().chunked(keySize).map { it.toByteArray() }.zipWithNext()
     return pairs.sumOf {
@@ -99,7 +97,6 @@ fun main() {
     val keySize = (2..40).asSequence().minByOrNull { keySizeHammingDistance(ciphertext, it) }!!
     val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
     val transposed = (0..keySize-1).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
-
     val key = transposed.map { bestKey(it) }.toByteArray()
     System.out.write(repeatXor(ciphertext, key))
 }
