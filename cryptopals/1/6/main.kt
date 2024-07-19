@@ -49,18 +49,24 @@ private fun englishDiff(byteArray: ByteArray): Double {
             .sum()
 }
 
-private fun breakSingleKeyXor(ciphertext: ByteArray): ByteArray {
-    var plaintext = ByteArray(0)
+private fun bestKey(block: ByteArray): Byte {
+    var key = 0.toByte()
     var diff = Double.MAX_VALUE
-    for (key in Byte.MIN_VALUE..Byte.MAX_VALUE) {
-        val plaintext2 = xor(ciphertext, key.toByte())
+    for (key2 in Byte.MIN_VALUE..Byte.MAX_VALUE) {
+        val plaintext2 = xor(block, key2.toByte())
         val diff2 = englishDiff(plaintext2)
         if (diff2 < diff) {
             diff = diff2
-            plaintext = plaintext2
+            key = key2.toByte()
         }
     }
-    return plaintext
+    return key
+}
+
+private fun repeatXor(a: ByteArray, key: ByteArray): ByteArray {
+    val c = ByteArray(a.size)
+    a.forEachIndexed { i, a2 -> c[i] = (a2.toInt() xor key[i % key.size].toInt()).toByte() }
+    return c
 }
 
 fun main() {
@@ -88,6 +94,8 @@ fun main() {
                     .sortedBy { it.second }) {
         val blocks = ciphertext.asList().chunked(keySize).map { it.toByteArray() }
         val transposed = (1..keySize).map { i -> blocks.map { it[i] }.toByteArray() }
-        val solved = transposed.map { it to englishDiff(breakSingleKeyXor(it)) }.sortedBy { it.second }
+        val key = transposed.map { bestKey(it) }.toByteArray()
+        val plaintext = repeatXor(ciphertext, key)
+        println(String.format("%d %s", keySize, String(plaintext)))
     }
 }
