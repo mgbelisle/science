@@ -65,10 +65,8 @@ private fun bestKey(block: ByteArray): Byte {
 }
 
 private fun repeatXor(a: ByteArray, key: ByteArray): ByteArray {
-    // println(key.size)
     val c = ByteArray(a.size)
     for ((i, a2) in a.withIndex()) {
-        // println(String.format("i=%d key.size=%d mod=%d val=%s", i, key.size, i % key.size, key[i % key.size].toInt().toChar()))
         c[i] = (a2.toInt() xor key[i % key.size].toInt()).toByte()
     }
     return c
@@ -103,7 +101,5 @@ fun main() {
     val transposed = (0..keySize-1).map { i -> blocks.mapNotNull { it.getOrNull(i) }.toByteArray() }
 
     val key = transposed.map { bestKey(it) }.toByteArray()
-    // println(transposed.size)
     System.out.write(repeatXor(ciphertext, key))
-    // System.out.flush()
 }
